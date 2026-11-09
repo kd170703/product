@@ -1,0 +1,64 @@
+name: product
+
+x-application: &application
+  build:
+    context: .
+  image: product-monitoring:local
+  env_file:
+    - .env
+  environment:
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Задайте DJANGO_SECRET_KEY в .env}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+    IMPORT_WATCH_DIR: /app/incoming
+  volumes:
+    - media:/app/media
+    - ./incoming:/app/incoming:ro
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-product}
+      POSTGRES_USER: ${POSTGRES_USER:-product}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    <<: *application
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=4).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  worker:
+    <<: *application
+    command: ["python", "manage.py", "runworker", "--interval", "15"]
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  media:

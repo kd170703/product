@@ -1,0 +1,16 @@
+.venv/
+.env
+__pycache__/
+*.py[cod]
+media/
+staticfiles/
+incoming/
+backups/
+work/
+data/source/
+data/normalized_registry.json
+docs/source-audit.md
+*.sqlite3
+*.log
+.coverage
+data/source_discrepancies.json
