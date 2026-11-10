@@ -30,7 +30,7 @@ def _dimension(row):
 def recompute_formulas():
     result={'versions_created':0,'limitations':[]}
     latest={}
-    for f in Formula.objects.filter(methodology__approved=True).select_related('indicator','methodology').order_by('indicator_id','-methodology__version'):
+    for f in Formula.objects.filter(methodology__approved=True,indicator__is_active=True).select_related('indicator','methodology').order_by('indicator_id','-methodology__version'):
         latest.setdefault(f.indicator.code,f)
     # A dependency is computed before formulas that consume it. Cycles are never evaluated.
     ordered=[];visiting=set();done=set()

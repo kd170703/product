@@ -1,5 +1,6 @@
 """Authenticated Russian workspace; observation writes go through domain services."""
 import json
+from urllib.parse import urlencode
 from functools import wraps
 from django.conf import settings
 from django.contrib import messages
@@ -7,6 +8,10 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Count
+from django.http import JsonResponse
+from .services.periods import normalize_period_filters,classify_period
+from .services.presentation import clean_public_data,clean_public_text
+from .services.charts import build_chart_specs
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -50,12 +55,16 @@ def _permission(request, name):
 
 
 def _filters(data):
-    allowed = ['q', 'topic', 'territory', 'start', 'end', 'section', 'indicator']
-    return {key: str(data.get(key, '')).strip() for key in allowed if str(data.get(key, '')).strip()}
+    allowed = ['q','topic','territory','start','end','section','indicator','period_mode','period_year','period_quarter','period','year','quarter']
+    return normalize_period_filters({key:str(data.get(key,'')).strip() for key in allowed if str(data.get(key,'')).strip()})
 
 
 def _filter_context(filters):
-    return {'filters': filters, 'has_filters': bool(filters), 'topics': Topic.objects.all(), 'territories': Observation.objects.values_list('territory', flat=True).distinct().order_by('territory')}
+    years=set(range(2024,timezone.localdate().year+2))
+    for period in Observation.objects.filter(indicator__is_active=True).values('period_label','period_start','period_end','period_kind').distinct():
+        year=classify_period(period).get('year')
+        if year:years.add(year)
+    return {'filters':filters,'has_filters':any(v and not (k=='period_mode' and v=='all') for k,v in filters.items()),'topics':Topic.objects.all(),'period_years':sorted(years,reverse=True),'territories':Observation.objects.filter(indicator__is_active=True).values_list('territory',flat=True).distinct().order_by('territory')}
 
 
 def _error_text(error):
@@ -70,6 +79,7 @@ def dashboard(request, section=None):
         from django.http import Http404
         raise Http404('Раздел не найден.')
     filters = _filters(request.GET)
+    if section:filters['section']=section
     payload = dashboard_payload(filters, section)
     rows = payload.get('rows')
     if rows is None:
@@ -77,7 +87,7 @@ def dashboard(request, section=None):
     page = Paginator(rows, 50).get_page(request.GET.get('page'))
     query = request.GET.copy()
     query.pop('page', None)
-    context = {**payload, **_filter_context(filters), 'active': section or 'dashboard', 'page_title': dict(SECTIONS).get(section, 'Обзор мониторинга'), 'page_description': SECTION_DESCRIPTIONS.get(section, 'Данные, источники и квартальные отчёты в одном рабочем пространстве.'), 'rows': list(page.object_list), 'page_obj': page, 'pagination_query': query.urlencode(), 'rows_limited': False}
+    context = {**payload, **_filter_context(filters), 'active': section or 'dashboard', 'page_title': dict(SECTIONS).get(section, 'Обзор мониторинга'), 'page_description': SECTION_DESCRIPTIONS.get(section, 'Данные, источники и квартальные отчёты в одном рабочем пространстве.'), 'rows': list(page.object_list), 'page_obj': page, 'pagination_query':query.urlencode(),'report_query':urlencode({k:v for k,v in filters.items() if not k.startswith('_')}),'rows_limited':False}
     if section == 'fintest':
         accuracy = payload.get('accuracy', {})
         context['limitation'] = accuracy.get('limitation') or ('Сводная доля правильных ответов: ' + str(accuracy.get('display', '')) + ' %. Расчёт по точным числителям и знаменателям.')
@@ -88,7 +98,7 @@ def dashboard(request, section=None):
 
 @viewer_required
 def observation_detail(request, pk):
-    obs = get_object_or_404(Observation.objects.select_related('indicator', 'current_version__publication__source', 'question_version', 'wave__study'), pk=pk)
+    obs = get_object_or_404(Observation.objects.select_related('indicator', 'current_version__publication__source', 'question_version', 'wave__study'), pk=pk,indicator__is_active=True)
     if request.method == 'POST':
         require_editor(request.user)
     correction_form = CorrectionForm(auto_id="correction_%s")
@@ -132,7 +142,7 @@ def observation_detail(request, pk):
             messages.error(request, 'Неизвестное действие с наблюдением.')
     rows = filtered_observations({'indicator': obs.indicator.code})
     row = next((r for r in rows if r['id'] == obs.pk), None)
-    return render(request, 'monitoring/observation_detail.html', {'active': obs.indicator.section, 'observation': obs, 'row': row, 'versions': obs.versions.select_related('created_by', 'publication__source', 'methodology'), 'corrections': obs.corrections.select_related('created_by', 'resolved_by', 'based_on').order_by('-created_at'), 'active_correction': active_correction, 'correction_form': correction_form, 'resolution_form': resolution_form, 'provenance_text': json.dumps(obs.current_version.provenance, ensure_ascii=False, indent=2) if obs.current_version else ''})
+    return render(request, 'monitoring/observation_detail.html', {'active': obs.indicator.section, 'observation': obs, 'row': row, 'versions': obs.versions.select_related('created_by', 'publication__source', 'methodology'), 'corrections': obs.corrections.select_related('created_by', 'resolved_by', 'based_on').order_by('-created_at'), 'active_correction': active_correction, 'correction_form': correction_form, 'resolution_form': resolution_form, 'provenance_text': json.dumps(clean_public_data(obs.current_version.provenance),ensure_ascii=False,indent=2) if obs.current_version else ''})
 
 
 @editor_required
@@ -163,7 +173,7 @@ def observation_create(request):
 @editor_required
 def indicator_edit(request, pk=None):
     _permission(request, 'change_indicator' if pk else 'add_indicator')
-    instance = get_object_or_404(Indicator, pk=pk) if pk else None
+    instance = get_object_or_404(Indicator,pk=pk,is_active=True) if pk else None
     form = IndicatorForm(request.POST or None, instance=instance)
     if instance and instance.observations.exists():
         form.fields['code'].disabled = True
@@ -185,8 +195,9 @@ def sources(request):
     severity=request.GET.get('severity','')
     if severity in ['info','warning','error']:issue_qs=issue_qs.filter(severity=severity)
     issue_page=Paginator(issue_qs,50).get_page(request.GET.get('page'))
+    for issue in issue_page.object_list:issue.description=clean_public_text(issue.description);issue.references=clean_public_data(issue.references)
     query=request.GET.copy();query.pop('page',None)
-    context = {'active': 'sources', 'tab': tab, 'sources': Source.objects.all(), 'indicators': Indicator.objects.select_related('source').prefetch_related('topics')[:1000], 'topics': Topic.objects.prefetch_related('aliases'), 'aliases': TopicAlias.objects.select_related('topic'), 'issues': issue_page, 'issue_page':issue_page, 'issue_query':query.urlencode(), 'severity':severity, 'runs': LoadRun.objects.select_related('source', 'requested_by')[:100], 'source_count': Source.objects.count(), 'issue_count': DataIssue.objects.filter(resolved=False).count()}
+    context = {'active': 'sources', 'tab': tab, 'sources': Source.objects.all(), 'indicators': Indicator.objects.filter(is_active=True).select_related('source').prefetch_related('topics')[:1000], 'topics': Topic.objects.prefetch_related('aliases'), 'aliases': TopicAlias.objects.select_related('topic'), 'issues': issue_page, 'issue_page':issue_page, 'issue_query':query.urlencode(), 'severity':severity, 'runs': LoadRun.objects.select_related('source', 'requested_by')[:100], 'source_count': Source.objects.count(), 'issue_count': DataIssue.objects.filter(resolved=False).count()}
     return render(request, 'monitoring/sources.html', context)
 
 
@@ -289,9 +300,10 @@ def import_detail(request, pk):
             except ValidationError as exc:
                 messages.error(request, _error_text(exc))
     preview = batch.preview or {}
+    preview=clean_public_data(preview)
     observations = preview.get('observations', [])
     indicators = {i.get('key') or i.get('code'): i.get('name') for i in preview.get('indicators', [])}
-    names = dict(Indicator.objects.values_list('code', 'name'))
+    names = dict(Indicator.objects.filter(is_active=True).values_list('code','name'))
     rows = []
     from django.core.paginator import Paginator
     preview_page=Paginator(observations,100).get_page(request.GET.get('page'))
@@ -340,7 +352,7 @@ def gpt(request):
                 uploaded = form.cleaned_data.get('file')
                 if uploaded:
                     text = extract_text(uploaded) + ('\n\nДополнительный текст:\n' + text if text else '')
-                catalog = Indicator.objects.all()
+                catalog = Indicator.objects.filter(is_active=True)
                 if form.cleaned_data.get('section'):
                     catalog = catalog.filter(section=form.cleaned_data['section'])
                 proposals = extract_records(text, form.cleaned_data['instruction'], catalog)
@@ -354,3 +366,32 @@ def gpt(request):
 
 def csrf_failure(request, reason=''):
     return render(request, 'monitoring/csrf_error.html', status=403)
+
+
+@viewer_required
+def chart_data(request):
+    filters=_filters(request.GET)
+    rows=filtered_observations(filters)
+    raw_ids=request.GET.get('ids','')
+    if raw_ids:
+        try:
+            selected={int(x) for x in raw_ids.split(',') if x}
+            if len(selected)>10000:raise ValueError()
+        except ValueError:return JsonResponse({'error':'Некорректный список наблюдений.'},status=400)
+        rows=[r for r in rows if r['id'] in selected]
+    specs=build_chart_specs(rows,request.GET.get('chart_kind','auto'))
+    return JsonResponse({'charts':[{k:v for k,v in s.items() if k!='rows'} for s in specs],'observations_count':len(rows),'chart_count':len(specs),'message':'' if specs else 'В этой выборке нет числовых значений для диаграммы.'},json_dumps_params={'ensure_ascii':False})
+
+
+@editor_required
+def indicator_delete(request,pk):
+    _permission(request,'delete_indicator')
+    indicator=get_object_or_404(Indicator,pk=pk,is_active=True)
+    if request.method=='POST':
+        indicator.is_active=False;indicator.deleted_at=timezone.now();indicator.deleted_by=request.user
+        indicator.save(update_fields=['is_active','deleted_at','deleted_by'])
+        from .services.calculations import recompute_formulas
+        recompute_formulas()
+        messages.success(request,'Показатель удалён из реестра.')
+        return redirect(reverse('monitoring:sources')+'?tab=indicators')
+    return render(request,'monitoring/indicator_confirm_delete.html',{'active':'sources','indicator':indicator,'observations_count':indicator.observations.count()})

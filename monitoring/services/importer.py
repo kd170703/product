@@ -168,10 +168,12 @@ def confirm_batch(batch,user):
             publication.file.save(Path(batch.file.name).name,ContentFile(content),save=False);publication.save()
     waves,qvs=register_definitions(payload,source)
     by_issue={i.get('key'):i for i in payload.get('issues',[]) if isinstance(i,dict)}
-    created=unchanged=0
+    created=unchanged=skipped_deleted=0
     for raw in payload['observations']:
         r=dict(raw)
         r['indicator_code']=r.get('indicator_code') or r.get('indicator_key')
+        if not Indicator.objects.filter(code=r['indicator_code'],is_active=True).exists():
+            skipped_deleted+=1;continue
         r['unit']=r.get('unit') or 'Не уточнено'
         r['issues']=[by_issue[x].get('message',str(x)) if isinstance(x,str) and x in by_issue else str(x) for x in r.get('issues',[])]
         # A proposal is always explicitly reviewed; presence of source warnings remains visible.
@@ -185,5 +187,5 @@ def confirm_batch(batch,user):
         DataIssue.objects.get_or_create(batch=batch,code=i.get('key') or i.get('code','warning'),defaults={'description':i.get('message') or i.get('description') or str(i),'severity':i.get('severity','warning'),'references':[i.get('source',{})]})
     from .calculations import recompute_formulas
     calculations=recompute_formulas()
-    batch.source=source;batch.publication=publication;batch.status='confirmed';batch.confirmed_at=timezone.now();batch.result={'versions_created':created,'unchanged':unchanged,'issues':len(payload.get('issues',[])),'calculations':calculations};batch.save()
+    batch.source=source;batch.publication=publication;batch.status='confirmed';batch.confirmed_at=timezone.now();batch.result={'versions_created':created,'unchanged':unchanged,'skipped_deleted':skipped_deleted,'issues':len(payload.get('issues',[])),'calculations':calculations};batch.save()
     return batch.result

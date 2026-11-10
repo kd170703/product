@@ -3,12 +3,14 @@ from . import ui_views as views
 from .downloads import download
 app_name = 'monitoring'
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    path('',views.dashboard,name='dashboard'),
+    path('charts/data/',views.chart_data,name='chart_data'),
     path('sections/<str:section>/', views.dashboard, name='section'),
     path('observations/new/', views.observation_create, name='observation_create'),
     path('observations/<int:pk>/', views.observation_detail, name='observation_detail'),
     path('indicators/new/', views.indicator_edit, name='indicator_create'),
-    path('indicators/<int:pk>/edit/', views.indicator_edit, name='indicator_update'),
+    path('indicators/<int:pk>/edit/',views.indicator_edit,name='indicator_update'),
+    path('indicators/<int:pk>/delete/',views.indicator_delete,name='indicator_delete'),
     path('sources/', views.sources, name='sources'),
     path('sources/new/', views.source_edit, name='source_create'),
     path('sources/<int:pk>/edit/', views.source_edit, name='source_update'),

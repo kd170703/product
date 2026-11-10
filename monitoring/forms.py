@@ -41,8 +41,8 @@ class SourceForm(forms.ModelForm):
 
 
 class ObservationForm(forms.Form):
-    indicator = forms.ModelChoiceField(queryset=Indicator.objects.all(), label='Показатель')
-    question_version = forms.ModelChoiceField(queryset=QuestionVersion.objects.all(), label='Версия вопроса', required=False, help_text='Выберите для социологии или финтеста. При отсутствии будет использована последняя версия вопроса.')
+    indicator = forms.ModelChoiceField(queryset=Indicator.objects.filter(is_active=True), label='Показатель')
+    question_version = forms.ModelChoiceField(queryset=QuestionVersion.objects.filter(question__indicator__is_active=True), label='Версия вопроса', required=False, help_text='Выберите для социологии или финтеста. При отсутствии будет использована последняя версия вопроса.')
     wave = forms.ModelChoiceField(queryset=Wave.objects.all(), label='Волна исследования', required=False)
     territory = forms.CharField(label='Территория', initial='Москва', max_length=150)
     period_label = forms.CharField(label='Период в источнике', max_length=300, help_text='Например: «I квартал 2026» или «01.07.2026».')

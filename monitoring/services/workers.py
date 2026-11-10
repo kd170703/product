@@ -8,7 +8,7 @@ from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
 from django.db import transaction,connection,IntegrityError
 from django.utils import timezone
-from monitoring.models import Source,LoadRun,Publication,ImportBatch,DataIssue
+from monitoring.models import Source,LoadRun,Publication,ImportBatch,DataIssue,Indicator
 from .adapters import discover,fetch_url,parse_file,AdapterError
 from .importer import register_definitions,validate_preview
 from .observations import upsert_observation,validate_record,parse_date
@@ -80,6 +80,7 @@ def apply_payload(payload,publication):
     count=unchanged=0
     for raw in payload['observations']:
         r=dict(raw);r['indicator_code']=r.get('indicator_code') or r.get('indicator_key')
+        if not Indicator.objects.filter(code=r['indicator_code'],is_active=True).exists():continue
         r['unit']=r.get('unit') or 'Не уточнено'
         r['issues']=[by_issue[x].get('message',x) if isinstance(x,str) and x in by_issue else str(x) for x in r.get('issues',[])]
         if r.get('question_key') in qvs:r['question_version_id']=qvs[r['question_key']].pk

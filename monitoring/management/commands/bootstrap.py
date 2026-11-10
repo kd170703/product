@@ -26,7 +26,7 @@ class Command(BaseCommand):
         admin,_=Group.objects.get_or_create(name='Администрирование')
         perms=Permission.objects.filter(content_type__app_label='monitoring')
         viewer.permissions.set(perms.filter(codename__startswith='view_'))
-        editor.permissions.set(perms.filter(codename__startswith='view_')|perms.filter(codename__in=['add_observation','add_indicator','change_indicator','add_source','change_source','add_importbatch','add_reportsnapshot','add_manualcorrection','add_topic','change_topic','add_topicalias','change_topicalias']))
+        editor.permissions.set(perms.filter(codename__startswith='view_')|perms.filter(codename__in=['add_observation','add_indicator','change_indicator','delete_indicator','add_source','change_source','add_importbatch','add_reportsnapshot','add_manualcorrection','add_topic','change_topic','add_topicalias','change_topicalias']))
         # Immutable history/publication/snapshot rows remain read-only in admin for everyone.
         admin.permissions.set(perms|Permission.objects.filter(content_type__app_label='auth'))
         for spec in PILOT_SOURCES:

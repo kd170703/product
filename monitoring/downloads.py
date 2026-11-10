@@ -3,6 +3,7 @@ from django.http import FileResponse,Http404,JsonResponse
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 from monitoring.models import Publication,ImportBatch,ReportSnapshot
+from monitoring.services.presentation import clean_public_data
 
 @login_required
 def download(request,kind,pk,fmt):
@@ -14,7 +15,7 @@ def download(request,kind,pk,fmt):
     elif kind=='batch':
         batch=get_object_or_404(ImportBatch,pk=pk)
         if fmt=='preview':
-            response=JsonResponse(batch.preview,json_dumps_params={'ensure_ascii':False,'indent':2})
+            response=JsonResponse(clean_public_data(batch.preview),json_dumps_params={'ensure_ascii':False,'indent':2})
             response['Content-Disposition']=f'attachment; filename="import-preview-{batch.pk}.json"'
             return response
         field=batch.file

@@ -9,7 +9,8 @@ class ImmutableAdmin(admin.ModelAdmin):
 
 @admin.register(Indicator)
 class IndicatorAdmin(admin.ModelAdmin):
-    list_display=['code','name','section','unit'];list_filter=['section','topics'];search_fields=['code','name'];filter_horizontal=['topics']
+    def has_delete_permission(self,request,obj=None):return False
+    list_display=['code','name','section','unit','is_active'];list_filter=['section','topics','is_active'];search_fields=['code','name'];filter_horizontal=['topics']
     def get_readonly_fields(self,request,obj=None):return ['code'] if obj and obj.observations.exists() else []
 
 @admin.register(Source)

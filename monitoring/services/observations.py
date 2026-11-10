@@ -57,7 +57,7 @@ def validate_record(record, indicator=None):
     if r['numerator'] is not None and (r['numerator']<0 or r['numerator']>r['denominator']): raise ValidationError('Числитель должен быть от 0 до знаменателя.')
     issues=list(r.get('issues') or [])
     if not (r['period_start'] or r['period_end']): issues.append('Период не приведён к датам; требуется сверка.')
-    if r['period_kind']=='unknown': issues.append('Тип периода требует проверки.')
+    if r['period_kind']=='unknown': issues.append('Тип периода не определён в источнике.')
     if indicator.unit and indicator.unit!=r['unit']: issues.append(f'Единица паспорта «{indicator.unit}» отличается от «{r["unit"]}».')
     r['issues']=list(dict.fromkeys(str(i) for i in issues))
     r['status']='conflict' if r.get('status')=='conflict' or r.get('verification')=='conflict' else ('pending' if r['issues'] or r.get('status')=='pending' or r.get('verification') in ['pending','review','needs_review','unverified'] else 'verified')
@@ -71,6 +71,7 @@ def _hash(obj): return hashlib.sha256(json.dumps(obj,ensure_ascii=False,sort_key
 def upsert_observation(record, publication=None, user=None, method='auto'):
     if method in ['manual','gpt']: require_editor(user)
     indicator=Indicator.objects.get(code=record.get('indicator_code') or record.get('indicator_key'))
+    if not indicator.is_active:raise ValidationError('Показатель удалён из активного реестра.')
     r=validate_record(record,indicator)
     qv=None
     if r.get('question_version_id'): qv=QuestionVersion.objects.get(pk=r['question_version_id'],question__indicator=indicator)
@@ -94,6 +95,12 @@ def upsert_observation(record, publication=None, user=None, method='auto'):
     content={'value':r['value'],'data_state':r['data_state'],'unit':r['unit'],'numerator':r['numerator'],'denominator':r['denominator'],'base':str(r['base']) if r.get('base') is not None else '','provenance':provenance,'issues':r['issues'],'publication_checksum':publication.checksum if publication else None,'status':r['status'],'publication_date':r.get('publication_date') or (publication.published_at if publication else None),'methodology_id':r.get('methodology_id')}
     digest=_hash(content)
     if obs.current_version and (obs.current_version.content_hash==digest or obs.current_version.provenance.get('_source_hash')==digest): return obs,False
+    current=obs.current_version
+    if current and publication and current.publication and current.publication.checksum==publication.checksum:
+        # Display wording can change across app releases without becoming a new source observation.
+        same_fields=(current.value==r['value'] and current.data_state==r['data_state'] and current.unit==r['unit'] and current.numerator==r['numerator'] and current.denominator==r['denominator'] and current.base==(str(r['base']) if r.get('base') is not None else '') and current.publication_date==(parse_date(r.get('publication_date')) or publication.published_at) and current.methodology_id==r.get('methodology_id'))
+        same_location=all(current.provenance.get(k)==provenance.get(k) for k in ['file','sheet','cell','page','url','raw_value','answer_count'])
+        if same_fields and same_location:return obs,False
     if obs.current_version and publication and obs.current_version.publication and publication.source_id!=obs.current_version.publication.source_id:
         r['status']='conflict'; r['issues'].append('Разные источники дают наблюдение с одинаковыми измерениями. Требуется сверка.')
     version=ObservationVersion.objects.create(observation=obs,number=(obs.current_version.number+1 if obs.current_version else 1),value=r['value'],data_state=r['data_state'],unit=r['unit'],numerator=r['numerator'],denominator=r['denominator'],base=str(r['base']) if r.get('base') is not None else '',publication=publication,publication_date=parse_date(r.get('publication_date')) or (publication.published_at if publication else None),provenance=provenance,method=method,status=r['status'],issues=r['issues'],content_hash=digest,created_by=user,reason=r.get('reason') or '',methodology_id=r.get('methodology_id'))

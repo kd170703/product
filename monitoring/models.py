@@ -5,9 +5,9 @@ from django.db.models import Q
 from django.utils import timezone
 
 SECTIONS = [('sociology','Социология'),('fintest','Финтест'),('statistics','Социально-экономические показатели'),('irfk','ИРФК'),('quiz','Онлайн-зачёт')]
-PERIOD_KINDS = [('stock','Остаток на дату'),('flow','Значение за период'),('cumulative','Накопительный итог'),('unknown','Тип периода требует проверки')]
+PERIOD_KINDS = [('stock','Остаток на дату'),('flow','Значение за период'),('cumulative','Накопительный итог'),('unknown','Период источника')]
 DATA_STATES = [('value','Значение'),('missing','Нет данных'),('na','Неприменимо')]
-STATUS = [('pending','Требует проверки'),('verified','Проверено'),('conflict','Есть расхождение')]
+STATUS = [('pending','Исходные данные'),('verified','Проверено'),('conflict','Есть расхождение')]
 
 class Topic(models.Model):
     slug = models.SlugField(unique=True)
@@ -80,6 +80,9 @@ class Wave(models.Model):
     def __str__(self): return self.name
 
 class Indicator(models.Model):
+    is_active = models.BooleanField('В активном реестре',default=True)
+    deleted_at = models.DateTimeField('Дата удаления из реестра',null=True,blank=True)
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True,blank=True,related_name='removed_indicators',verbose_name='Удалил')
     code = models.CharField('Код',max_length=150,unique=True)
     name = models.TextField('Показатель')
     section = models.CharField('Раздел',max_length=20,choices=SECTIONS)

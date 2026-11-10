@@ -281,7 +281,7 @@ def parse_registry(path):
                     obs = observation("statistics", ikey, None, cell.value, str(raw_unit or ""), source, period,
                                       topic_keys=[tkey] if tkey else [], metric_kind=kind)
                     if "/" in period:
-                        obs["issues"].append(issue("ambiguous_period", "Заголовок совмещает IV квартал и год; точный период требует проверки публикации, автоматически год или квартал не выбран.", sheet.title, cell.coordinate, obs["key"]))
+                        obs["issues"].append(issue("ambiguous_period", "Заголовок совмещает IV квартал и год; сохранена исходная подпись периода без разделения значения на год и квартал.", sheet.title, cell.coordinate, obs["key"]))
                     elif re.match(r"I кв\.\s*(\d{4})", period):
                         year = re.search(r"\d{4}", period).group()
                         if kind == "stock":

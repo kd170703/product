@@ -63,28 +63,99 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(sheet.cell(2, 3).data_type, "s")
         self.assertTrue(sheet.cell(2, 3).value.startswith("="))
 
-    def test_word_has_editable_unshaded_tables_font_hyperlinks_and_chart(self):
+    def test_word_has_editable_unshaded_landscape_three_column_form(self):
         from docx import Document
+        from docx.enum.section import WD_ORIENT
         doc = Document(io.BytesIO(render_docx(self.rows, {"territory": "Москва"})))
         text = "\n".join(p.text for p in doc.paragraphs)
+        table_text = "\n".join(cell.text for row in doc.tables[0].rows for cell in row.cells)
         self.assertIn("Мониторинг финансовой культуры", text)
-        self.assertIn("Сбережения", text)
-        self.assertIn("Вовлечение граждан", text)
+        self.assertIn("СБЕРЕЖЕНИЯ", table_text)
+        self.assertIn("ВОВЛЕЧЕНИЕ ГРАЖДАН", table_text)
         self.assertEqual(doc.styles["Normal"].font.name, "Times New Roman")
         self.assertEqual(doc.styles["Normal"].font.size.pt, 14)
-        self.assertTrue(doc.tables)
-        self.assertEqual(doc.tables[0].cell(1, 1).text, "0")
-        self.assertIn("Нет данных", doc.tables[0].cell(2, 1).text)
+        self.assertEqual(doc.sections[0].orientation, WD_ORIENT.LANDSCAPE)
+        self.assertAlmostEqual(doc.sections[0].page_width / 914400, 11.6930556, places=3)
+        self.assertAlmostEqual(doc.sections[0].page_height / 914400, 8.2680556, places=3)
+        self.assertEqual(len(doc.tables), 1)
+        self.assertEqual(len(doc.tables[0].columns), 3)
+        self.assertEqual(len(doc.tables[0]._tbl.xpath('.//w:gridSpan[@w:val="3"]')), 13)
+        self.assertIn("2025 — 0 человек", table_text)
+        self.assertIn("Нет данных", table_text)
+        self.assertIn("Неприменимо", table_text)
         self.assertFalse(doc.element.xpath(".//w:shd"))
         self.assertTrue(any(rel.reltype.endswith("/hyperlink") and rel.target_ref == "https://example.org/data" for rel in doc.part.rels.values()))
         self.assertGreater(len(doc.inline_shapes), 0)
+        self.assertNotIn("требует проверки", (text + table_text).casefold())
+        self.assertTrue(any("Блок социологических" in row.cells[0].text and "Блок статистических" in row.cells[1].text and "Финансовый тест" in row.cells[2].text for row in doc.tables[0].rows))
 
-    def test_conflict_values_remain_in_table_with_issues(self):
+    def test_conflict_values_remain_with_source_note_without_workflow_badge(self):
         from docx import Document
-        self.rows[0].update(status="conflict", issues=["Единица требует согласования"])
+        self.rows[0].update(status="conflict", issues=["Единица требует согласования", "Требует проверки"])
         doc = Document(io.BytesIO(render_docx(self.rows)))
-        self.assertIn("Единица требует согласования", doc.tables[0].cell(1, 5).text)
-        self.assertEqual(len(doc.inline_shapes), 0)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        self.assertIn("Единица требует согласования", text)
+        self.assertNotIn("требует проверки", text.casefold())
+        self.assertEqual(len(doc.inline_shapes), 1)
+        self.assertTrue(any(rel.reltype.endswith("/hyperlink") and rel.target_ref == "https://example.org/data" for rel in doc.part.rels.values()))
+
+    def test_word_places_questions_counts_percentages_and_sources_in_corresponding_columns(self):
+        from docx import Document
+        rows = [
+            {**self.rows[0], "indicator_code":"SOC", "indicator_name":"Какой способ оплаты?", "section":"sociology", "answer":"Карта", "unit":"%", "value":"80", "period_label":"Волна 2025"},
+            {**self.rows[0], "indicator_code":"FIN", "indicator_name":"Какой ответ верный?", "section":"fintest", "value":"25", "unit":"%", "denominator":"123", "numerator":None, "period_label":"2025 год"},
+            self.rows[0],
+        ]
+        doc = Document(io.BytesIO(render_docx(rows)))
+        content = next(row for row in doc.tables[0].rows if "Какой способ оплаты?" in row.cells[0].text)
+        self.assertIn("Карта — 80%", content.cells[0].text)
+        self.assertIn("Нулевое наблюдение", content.cells[1].text)
+        self.assertIn("2025 год — 123 / 25%", content.cells[2].text)
+        self.assertNotIn("30,75", content.cells[2].text)
+        self.assertIn("Источник:", content.cells[0].text)
+
+    def test_word_preserves_same_period_source_variants_without_averaging(self):
+        from docx import Document
+        rows=[{**self.rows[0],'value':'10','source_name':'Источник А','status':'conflict'},
+              {**self.rows[0],'value':'20','source_name':'Источник Б','source_url':'https://example.org/b','status':'conflict'}]
+        doc=Document(io.BytesIO(render_docx(rows)))
+        cell=next(row.cells[1].text for row in doc.tables[0].rows if 'Нулевое наблюдение' in row.cells[1].text)
+        self.assertIn('2025 · Источник А — 10 человек',cell)
+        self.assertIn('2025 · Источник Б — 20 человек',cell)
+        self.assertNotIn('15 человек',cell)
+
+    def test_excel_removes_workflow_status_labels_but_preserves_conflict_context(self):
+        from openpyxl import load_workbook
+        rows = [{**self.rows[0], "status":"pending", "issues":["Требует проверки", "Источник опубликован"]}]
+        sheet = load_workbook(io.BytesIO(render_xlsx(rows)))["Наблюдения"]
+        values = " ".join(str(c.value or '') for line in sheet for c in line)
+        self.assertNotIn("требует проверки", values.casefold())
+        self.assertNotIn("pending", values)
+        self.assertIn("Источник опубликован", values)
+        self.assertEqual(sheet.cell(2,6).value,0)
+
+    def test_sociology_dynamics_keep_answer_series_separate(self):
+        from monitoring.services.exports import _chart_png
+        rows=[]
+        for answer,values in [('Карта',[10,20]),('Наличные',[30,40])]:
+            for year,value in zip([2024,2025],values):
+                rows.append({**self.rows[0], 'indicator_code':'SOC-DYNAMICS', 'section':'sociology', 'answer':answer, 'value':str(value), 'unit':'%', 'period_label':f'{year} год', 'period_start':f'{year}-01-01', 'period_end':f'{year}-12-31'})
+        from matplotlib.axes import Axes
+        original=Axes.plot
+        plotted=[]
+        def capture(axis,x,y,*args,**kwargs):
+            plotted.append(list(y))
+            return original(axis,x,y,*args,**kwargs)
+        with patch.object(Axes,'plot',new=capture):
+            content=_chart_png(rows)
+        self.assertTrue(content.startswith(b'\x89PNG'))
+        self.assertIn([10,20],plotted)
+        self.assertIn([30,40],plotted)
+        self.assertNotIn([10,30,20,40],plotted)
+
+    def test_report_title_uses_explicit_calendar_quarter(self):
+        from monitoring.services.exports import report_period_label
+        self.assertEqual(report_period_label({'period_mode':'quarter','period_year':'2024','period_quarter':'1'}),'I квартал 2024 года')
 
     def test_canonical_topic_slugs_and_source_block_order(self):
         for slug, name in [('consumer', 'Потребительское поведение'), ('tax', 'Налоги'), ('civic', 'Вовлечение граждан в процессы управления городом')]:
@@ -104,19 +175,21 @@ class ExportTests(unittest.TestCase):
         original = exports._chart_png
         calls = []
         cached = original([normalize_row(rows[0])])
-        def chart(record):
+        def chart(record, **kwargs):
             calls.append(record)
             return cached
         with patch('monitoring.services.exports._chart_png', side_effect=chart):
             doc = Document(io.BytesIO(render_docx(rows)))
         self.assertEqual(len(calls), 2)
-        self.assertEqual(len(doc.tables[0].rows)-1, 5)
+        self.assertEqual(sum('Синтетический показатель' in row.cells[1].text for row in doc.tables[0].rows), 5)
         self.assertIn('до двух', '\n'.join(p.text for p in doc.paragraphs))
 
-    def test_statistical_charts_require_confirmed_dates_and_units(self):
+    def test_statistical_charts_preserve_values_with_original_period_labels(self):
         unknown = normalize_row({**self.rows[0], 'period_end':None})
         unit_conflict = normalize_row({**self.rows[0], 'issues':['Единица в названии отличается от таблицы']})
-        self.assertEqual(list(_chart_groups([unknown, unit_conflict])), [])
+        groups = list(_chart_groups([unknown, unit_conflict]))
+        self.assertEqual(sum(len(group) for group in groups), 2)
+        self.assertTrue(all(row["unit"] == "человек" for group in groups for row in group))
 
 
 class GPTTests(unittest.TestCase):
