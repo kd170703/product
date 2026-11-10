@@ -1,5 +1,11 @@
 name: product-prod
 
+x-logging: &service-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-application: &application
   image: ${APP_IMAGE:-ghcr.io/kd170703/product:main}
   environment:
@@ -34,6 +40,7 @@ x-application: &application
   tmpfs:
     - /tmp:size=128m,mode=1777
   restart: unless-stopped
+  logging: *service-logging
   init: true
   security_opt:
     - no-new-privileges:true
@@ -43,6 +50,7 @@ x-application: &application
 services:
   db:
     image: postgres:17.6-alpine
+    logging: *service-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-product}
       POSTGRES_USER: ${POSTGRES_USER:-product}
@@ -97,6 +105,7 @@ services:
 
   caddy:
     image: caddy:2.10.2-alpine
+    logging: *service-logging
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?Задайте APP_DOMAIN в .env.prod}
     ports:
@@ -121,6 +130,7 @@ services:
 
   backup:
     image: ${BACKUP_IMAGE:-ghcr.io/kd170703/product-backup:main}
+    logging: *service-logging
     environment:
       PGHOST: db
       PGPORT: '5432'
@@ -138,7 +148,13 @@ services:
       - db_password
       - backup_password
     volumes:
-      - media:/media:ro
+      # A read-only consumer must not initialise the app volume as root.
+      - type: volume
+        source: media
+        target: /media
+        read_only: true
+        volume:
+          nocopy: true
       - ${BACKUP_DIRECTORY:-./backups-prod}:/backups
     networks:
       - backend

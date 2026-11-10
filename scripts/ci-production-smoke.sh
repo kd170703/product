@@ -95,6 +95,7 @@ docker run --rm --network none --read-only --entrypoint /bin/sh "$BACKUP_IMAGE" 
     esac
     command -v flock
     test "$(TZ=Europe/Moscow date +%z)" = +0300
+    test "$(stat -c %u:%g /media)" = 10001:10001
     for script in /usr/local/bin/backup-*.sh /usr/local/bin/restore-backup.sh; do
         sh -n "$script"
     done
