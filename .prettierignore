@@ -1,0 +1,7 @@
+node_modules/
+work/
+media/
+staticfiles/
+incoming/
+backups/
+data/

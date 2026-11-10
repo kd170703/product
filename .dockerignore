@@ -12,6 +12,8 @@ media
 staticfiles
 incoming
 backups
+backups-prod
+.secrets
 attachments
 work
 data
@@ -27,3 +29,7 @@ docs/owner-review-private.md
 **/*.xlsx
 **/*.docx
 **/*.pdf
+
+node_modules
+
+assets

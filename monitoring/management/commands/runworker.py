@@ -8,8 +8,13 @@ class Command(BaseCommand):
     def add_arguments(self,parser):
         parser.add_argument('--once',action='store_true');parser.add_argument('--interval',type=int,default=15)
     def handle(self,*args,**options):
+        from monitoring.management.commands.cleanup_auth import cleanup_auth_records
+        next_auth_cleanup = 0
         while True:
             close_old_connections()
+            if time.monotonic() >= next_auth_cleanup:
+                cleanup_auth_records()
+                next_auth_cleanup = time.monotonic() + 3600
             result=worker_tick()
             if result['run']:self.stdout.write(str(result))
             if options['once']:return

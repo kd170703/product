@@ -1,7 +1,45 @@
 {% extends 'monitoring/base.html' %}
+
 {% block title %}Удаление показателя{% endblock %}
-{% block breadcrumb %}Удаление показателя{% endblock %}
+
 {% block content %}
-<div class="page-heading"><div><a class="back-link" href="{% url 'monitoring:indicator_update' indicator.pk %}">← Паспорт показателя</a><h1>Удалить показатель?</h1><p class="page-description">{{ indicator.name }}</p></div></div>
-<section class="panel form-panel"><div class="content-pad"><p class="content-text">Показатель исчезнет из паспортов, диаграмм и новых отчётов. История исходных данных и уже выпущенные отчёты сохранятся.</p><dl class="metadata-grid"><div><dt>Код</dt><dd>{{ indicator.code }}</dd></div>{% if observations_count != None %}<div><dt>Наблюдения</dt><dd>{{ observations_count }}</dd></div>{% endif %}</dl><form method="post">{% csrf_token %}<div class="form-actions"><button class="button button-danger" type="submit">Удалить показатель</button><a class="button button-secondary" href="{% url 'monitoring:indicator_update' indicator.pk %}">Отмена</a></div></form></div></section>
+  <div class="page-heading">
+    <div>
+      <a class="back-link"
+         href="{% url 'monitoring:indicator_update' indicator.pk %}">{% icon 'arrow-left' %} Паспорт показателя</a>
+      <h1>Удалить показатель?</h1>
+      <p class="page-description">{{ indicator.name }}</p>
+    </div>
+  </div>
+  <section class="panel form-panel">
+    <div class="content-pad">
+      <p class="content-text">
+        Показатель исчезнет из паспортов, диаграмм и новых отчётов. История исходных данных и уже выпущенные отчёты сохранятся.
+      </p>
+      <dl class="metadata-grid">
+        <div>
+          <dt>Код</dt>
+          <dd>
+            {{ indicator.code }}
+          </dd>
+        </div>
+        {% if observations_count != None %}
+          <div>
+            <dt>Наблюдения</dt>
+            <dd>
+              {{ observations_count }}
+            </dd>
+          </div>
+        {% endif %}
+      </dl>
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-actions">
+          <button class="button button-danger" type="submit">Удалить показатель</button>
+          <a class="button button-secondary"
+             href="{% url 'monitoring:indicator_update' indicator.pk %}">Отмена</a>
+        </div>
+      </form>
+    </div>
+  </section>
 {% endblock %}

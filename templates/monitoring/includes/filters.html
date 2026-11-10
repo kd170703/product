@@ -1,19 +1,110 @@
 <form method="get" class="filter-panel" aria-label="Фильтры данных">
-  {% if filters.section %}<input type="hidden" name="section" value="{{ filters.section }}">{% endif %}
-  {% if filters.indicator %}<input type="hidden" name="indicator" value="{{ filters.indicator }}">{% endif %}
-  <div class="filter-title"><span aria-hidden="true">≡</span> Выбор данных</div>
-  <div class="filter-fields">
-    <label class="filter-field filter-search">Поиск<input type="search" name="q" value="{{ filters.q|default:'' }}" placeholder="Название показателя или вопрос"></label>
-    <label class="filter-field">Тематический раздел<select name="topic"><option value="">Все темы</option>{% for topic in topics %}<option value="{{ topic.slug }}" {% if filters.topic == topic.slug %}selected{% endif %}>{{ topic.name }}</option>{% endfor %}</select></label>
-    <label class="filter-field">Территория<input name="territory" value="{{ filters.territory|default:'' }}" placeholder="Все территории" list="territories"></label>
-    <label class="filter-field">Период<select name="period_mode" id="period-mode"><option value="all" {% if filters.period_mode == 'all' or not filters.period_mode %}selected{% endif %}>Все периоды</option><option value="quarter" {% if filters.period_mode == 'quarter' %}selected{% endif %}>Квартал</option><option value="year" {% if filters.period_mode == 'year' %}selected{% endif %}>Год</option><option value="date" {% if filters.period_mode == 'date' %}selected{% endif %}>Диапазон дат</option></select></label>
-    <label class="filter-field period-field" data-period-modes="quarter year" {% if filters.period_mode != 'quarter' and filters.period_mode != 'year' %}hidden{% endif %}>Год<select name="period_year" id="period-year"><option value="">Выберите год</option>{% for year in period_years %}<option value="{{ year }}" {% if filters.period_year|stringformat:'s' == year|stringformat:'s' %}selected{% endif %}>{{ year }} год</option>{% endfor %}</select></label>
-    <label class="filter-field period-field" data-period-modes="quarter" {% if filters.period_mode != 'quarter' %}hidden{% endif %}>Квартал<select name="period_quarter" id="period-quarter"><option value="">Выберите квартал</option><option value="1" {% if filters.period_quarter == '1' %}selected{% endif %}>I квартал · январь–март</option><option value="2" {% if filters.period_quarter == '2' %}selected{% endif %}>II квартал · апрель–июнь</option><option value="3" {% if filters.period_quarter == '3' %}selected{% endif %}>III квартал · июль–сентябрь</option><option value="4" {% if filters.period_quarter == '4' %}selected{% endif %}>IV квартал · октябрь–декабрь</option></select></label>
-    <label class="filter-field filter-date period-field" data-period-modes="date" {% if filters.period_mode != 'date' %}hidden{% endif %}>Начало периода<input type="date" name="start" value="{{ filters.start|default:'' }}"></label>
-    <label class="filter-field filter-date period-field" data-period-modes="date" {% if filters.period_mode != 'date' %}hidden{% endif %}>Конец периода<input type="date" name="end" value="{{ filters.end|default:'' }}"></label>
-    <button class="button button-primary filter-apply" type="submit">Применить</button>
-    {% if has_filters %}<a class="text-button filter-reset" href="{{ request.path }}">Сбросить</a>{% endif %}
+  {% if filters.section %}
+    <input type="hidden" name="section" value="{{ filters.section }}">
+  {% endif %}
+  {% if filters.indicator %}
+    <input type="hidden" name="indicator" value="{{ filters.indicator }}">
+  {% endif %}
+  <div class="filter-title">
+    <span aria-hidden="true">{% icon 'filter' %}</span> Выбор данных
   </div>
-  {% if territories %}<datalist id="territories">{% for territory in territories %}<option value="{{ territory }}">{% endfor %}</datalist>{% endif %}
-  <p class="filter-hint">Тема объединяет связанные вопросы и показатели. Квартал выбирает данные именно за этот квартал; годовые и полугодовые результаты не превращаются в квартальные.</p>
-</form>
+  <div class="filter-fields">
+    <label class="filter-field filter-search">
+      Поиск
+      <input type="search"
+             name="q"
+             value="{{ filters.q|default:'' }}"
+             placeholder="Название показателя или вопрос">
+    </label>
+    <label class="filter-field">
+      Тематический раздел
+      <select name="topic">
+        <option value="">Все темы</option>
+        {% for topic in topics %}
+          <option value="{{ topic.slug }}"
+                  {% if filters.topic == topic.slug %}selected{% endif %}>{{ topic.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="filter-field">
+      Территория
+      <input name="territory"
+             value="{{ filters.territory|default:'' }}"
+             placeholder="Все территории"
+             list="territories">
+    </label>
+    <label class="filter-field">
+      Период
+      <select name="period_mode" id="period-mode">
+        <option value="all"
+                {% if filters.period_mode == 'all' or not filters.period_mode %}selected{% endif %}>
+          Все периоды
+        </option>
+        <option value="quarter"
+                {% if filters.period_mode == 'quarter' %}selected{% endif %}>Квартал</option>
+        <option value="year"
+                {% if filters.period_mode == 'year' %}selected{% endif %}>Год</option>
+        <option value="date"
+                {% if filters.period_mode == 'date' %}selected{% endif %}>Диапазон дат</option>
+      </select>
+    </label>
+    <label class="filter-field period-field"
+           data-period-modes="quarter year"
+           {% if filters.period_mode != 'quarter' and filters.period_mode != 'year' %}hidden{% endif %}>
+      Год
+      <select name="period_year" id="period-year">
+        <option value="">Выберите год</option>
+        {% for year in period_years %}
+          <option value="{{ year }}"
+                  {% if filters.period_year|stringformat:'s' == year|stringformat:'s' %}selected{% endif %}>
+            {{ year }} год
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="filter-field period-field"
+           data-period-modes="quarter"
+           {% if filters.period_mode != 'quarter' %}hidden{% endif %}>
+      Квартал
+      <select name="period_quarter" id="period-quarter">
+        <option value="">Выберите квартал</option>
+        <option value="1" {% if filters.period_quarter == '1' %}selected{% endif %}>
+          I квартал · январь–март
+        </option>
+        <option value="2" {% if filters.period_quarter == '2' %}selected{% endif %}>
+          II квартал · апрель–июнь
+        </option>
+        <option value="3" {% if filters.period_quarter == '3' %}selected{% endif %}>
+          III квартал · июль–сентябрь
+        </option>
+        <option value="4" {% if filters.period_quarter == '4' %}selected{% endif %}>
+          IV квартал · октябрь–декабрь
+        </option>
+      </select>
+    </label>
+    <label class="filter-field filter-date period-field"
+           data-period-modes="date"
+           {% if filters.period_mode != 'date' %}hidden{% endif %}>
+      Начало периода
+      <input type="date" name="start" value="{{ filters.start|default:'' }}">
+    </label>
+    <label class="filter-field filter-date period-field"
+           data-period-modes="date"
+           {% if filters.period_mode != 'date' %}hidden{% endif %}>
+      Конец периода
+      <input type="date" name="end" value="{{ filters.end|default:'' }}">
+    </label>
+    <button class="button button-primary filter-apply" type="submit">Применить</button>
+    {% if has_filters %}
+      <a class="text-button filter-reset" href="{{ request.path }}">Сбросить</a>
+    {% endif %}
+  </div>
+  {% if territories %}
+    <datalist id="territories">
+      {% for territory in territories %}<option value="{{ territory }}">{% endfor %}
+      </datalist>
+    {% endif %}
+    <p class="filter-hint">
+      Тема объединяет связанные вопросы и показатели. Квартал выбирает данные именно за этот квартал; годовые и полугодовые результаты не превращаются в квартальные.
+    </p>
+  </form>

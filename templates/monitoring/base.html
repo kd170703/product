@@ -1,10 +1,102 @@
-{% load static %}<!doctype html>
+{% load static %}
+
+<!DOCTYPE html>
 <html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>{% block title %}Мониторинг финансовой культуры{% endblock %} · ЦФГ</title><link rel="icon" type="image/png" href="{% static 'monitoring/mascot.png' %}?v=20261110"><link rel="stylesheet" href="{% static 'monitoring/app.css' %}?v=20261110"><script defer src="{% static 'monitoring/app.js' %}?v=20261110"></script></head>
-<body><a class="skip-link" href="#main">Перейти к содержимому</a>
-<div class="app-shell"><aside class="sidebar" id="sidebar" aria-label="Главная навигация"><a class="brand" href="{% url 'monitoring:dashboard' %}"><span class="brand-symbol mascot-logo"><img src="{% static 'monitoring/mascot.png' %}?v=20261110" alt="Маскот Центра финансовой грамотности — лис"></span><span>Финансовая<br><b>культура</b><small>Центр финансовой грамотности</small></span></a>
-<div class="nav-label">МОНИТОРИНГ</div><nav class="main-nav"><a href="{% url 'monitoring:dashboard' %}" class="{% if active == 'dashboard' %}active{% endif %}"><span aria-hidden="true">▦</span> Обзор</a><a href="{% url 'monitoring:section' 'sociology' %}" class="{% if active == 'sociology' %}active{% endif %}"><span aria-hidden="true">◉</span> Социология</a><a href="{% url 'monitoring:section' 'fintest' %}" class="{% if active == 'fintest' %}active{% endif %}"><span aria-hidden="true">✓</span> Финтест</a><a href="{% url 'monitoring:section' 'statistics' %}" class="{% if active == 'statistics' %}active{% endif %}"><span aria-hidden="true">↗</span> Социально-экономические<br>показатели</a><a href="{% url 'monitoring:section' 'irfk' %}" class="{% if active == 'irfk' %}active{% endif %}"><span aria-hidden="true">◎</span> ИРФК</a><a href="{% url 'monitoring:section' 'quiz' %}" class="{% if active == 'quiz' %}active{% endif %}"><span aria-hidden="true">☑</span> Онлайн-зачёт</a></nav>
-<div class="nav-label">РАБОТА С ДАННЫМИ</div><nav class="main-nav"><a href="{% url 'monitoring:imports' %}" class="{% if active == 'imports' %}active{% endif %}"><span aria-hidden="true">↓</span> Импорт данных</a><a href="{% url 'monitoring:reports' %}" class="{% if active == 'reports' %}active{% endif %}"><span aria-hidden="true">▤</span> Квартальные отчёты</a><a href="{% url 'monitoring:gpt' %}" class="{% if active == 'gpt' %}active{% endif %}"><span aria-hidden="true">✦</span> Помощник GPT</a><a href="{% url 'monitoring:sources' %}" class="{% if active == 'sources' %}active{% endif %}"><span aria-hidden="true">⚙</span> Источники и настройки</a></nav>
-<div class="sidebar-bottom"><span class="status-dot"></span> Единая база мониторинга<br><small>История и источники сохранены</small></div></aside>
-<div class="workspace"><header class="topbar"><button class="mobile-toggle icon-button" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Открыть меню">☰</button><div><span class="topbar-title">Рабочее пространство</span><span class="topbar-separator">/</span><span class="topbar-current">{% block breadcrumb %}Мониторинг{% endblock %}</span></div><div class="account"><span class="private-label"><span class="status-dot"></span> Внутренний сервис</span>{% if user.is_authenticated %}<span class="avatar" aria-hidden="true">{{ user.username|first|upper }}</span><span class="account-name">{{ user.get_full_name|default:user.username }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-button" type="submit">Выйти</button></form>{% endif %}</div></header>
-<main id="main" class="main-content" tabindex="-1">{% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="notice {% if message.tags %}notice-{{ message.tags }}{% endif %}">{{ message }}</div>{% endfor %}</div>{% endif %}{% block content %}{% endblock %}</main><footer class="page-footer"><span>Центр финансовой грамотности</span><span>Мониторинг финансовой культуры</span></footer></div></div></body></html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>
+      {% block title %}Мониторинг финансовой культуры{% endblock %}
+    · ЦФГ</title>
+    <link rel="icon"
+          type="image/png"
+          sizes="64x64"
+          href="{% static 'monitoring/favicon-64.png' %}?v=20261110a11y-a11y">
+    <link rel="stylesheet"
+          href="{% static 'monitoring/app.css' %}?v=20261110a11y-a11y">
+    <script defer src="{% static 'monitoring/app.js' %}?v=20261110a11y-a11y"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Перейти к содержимому</a>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Главная навигация">
+        <a class="brand" href="{% url 'monitoring:dashboard' %}">
+          <span class="brand-symbol mascot-logo">
+            <img src="{% static 'monitoring/mascot-256.webp' %}"
+                 width="48"
+                 height="48"
+                 alt="Маскот Центра финансовой грамотности — лис"
+                 decoding="async">
+          </span>
+          <span>Финансовая
+            <br>
+            <b>культура</b><small>Центр финансовой грамотности</small></span>
+        </a>
+        <div class="nav-label">Мониторинг</div>
+        <nav class="main-nav" aria-label="Разделы мониторинга">
+          <a href="{% url 'monitoring:dashboard' %}"
+             {% if active == 'dashboard' %}class="active" aria-current="page"{% endif %}>{% icon 'dashboard' %} Обзор</a>
+          <a href="{% url 'monitoring:section' 'sociology' %}"
+             {% if active == 'sociology' %}class="active" aria-current="page"{% endif %}>{% icon 'users' %} Социология</a>
+          <a href="{% url 'monitoring:section' 'fintest' %}"
+             {% if active == 'fintest' %}class="active" aria-current="page"{% endif %}>{% icon 'check' %} Финтест</a>
+          <a href="{% url 'monitoring:section' 'statistics' %}"
+             {% if active == 'statistics' %}class="active" aria-current="page"{% endif %}>{% icon 'trend' %} Статистика</a>
+          <a href="{% url 'monitoring:section' 'irfk' %}"
+             {% if active == 'irfk' %}class="active" aria-current="page"{% endif %}>{% icon 'target' %} ИРФК</a>
+          <a href="{% url 'monitoring:section' 'quiz' %}"
+             {% if active == 'quiz' %}class="active" aria-current="page"{% endif %}>{% icon 'check-square' %} Онлайн-зачёт</a>
+        </nav>
+        <div class="nav-label">Работа с данными</div>
+        <nav class="main-nav" aria-label="Данные и настройки">
+          <a href="{% url 'monitoring:imports' %}"
+             {% if active == 'imports' %}class="active" aria-current="page"{% endif %}>{% icon 'upload' %} Импорт данных</a>
+          <a href="{% url 'monitoring:reports' %}"
+             {% if active == 'reports' %}class="active" aria-current="page"{% endif %}>{% icon 'report' %} Квартальные отчёты</a>
+          <a href="{% url 'monitoring:gpt' %}"
+             {% if active == 'gpt' %}class="active" aria-current="page"{% endif %}>{% icon 'sparkles' %} Помощник GPT</a>
+          <a href="{% url 'monitoring:sources' %}"
+             {% if active == 'sources' %}class="active" aria-current="page"{% endif %}>{% icon 'settings' %} Источники и настройки</a>
+        </nav>
+        <div class="sidebar-bottom">
+          Центр финансовой грамотности<small>Внутренний сервис мониторинга</small>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <button class="mobile-toggle icon-button"
+                  type="button"
+                  aria-controls="sidebar"
+                  aria-expanded="false"
+                  aria-label="Открыть меню">{% icon 'menu' %}</button>
+          <span class="topbar-app-name">Мониторинг финансовой культуры</span>
+          <div class="account">
+            {% if user.is_authenticated %}
+              <span class="avatar" aria-hidden="true">{{ user.username|first|upper }}</span>
+              <span class="account-name">{{ user.get_full_name|default:user.username }}</span>
+              <a class="text-button" href="{% url 'account_security' %}">Защита входа</a>
+              <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button class="text-button" type="submit">Выйти</button>
+              </form>
+            {% endif %}
+          </div>
+        </header>
+        <main id="main" class="main-content" tabindex="-1">
+          {% if messages %}
+            <div class="messages" aria-live="polite">
+              {% for message in messages %}
+                <div class="notice {% if message.tags %}notice-{{ message.tags }}{% endif %}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% block content %}{% endblock %}
+        </main>
+        <footer class="page-footer">
+          <span>Центр финансовой грамотности</span><span>Мониторинг финансовой культуры</span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>

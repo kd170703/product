@@ -1,0 +1,27 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Вход временно ограничен · Финансовая культура</title>
+    <link rel="stylesheet" href="{% static 'monitoring/app.css' %}">
+    <link rel="icon"
+          type="image/png"
+          sizes="64x64"
+          href="{% static 'monitoring/favicon-64.png' %}">
+  </head>
+  <body class="login-body">
+    <main class="login-form-wrap">
+      <section class="login-form" role="alert">
+        <h1>Вход временно ограничен</h1>
+        <p>
+          Достигнут предел неудачных попыток входа. Повторите попытку через {{ cooloff_timedelta }} или обратитесь к администратору.
+        </p>
+        <p>Ограничение действует для учётной записи или адреса подключения.</p>
+        <a class="button" href="{% url 'login' %}">Вернуться ко входу</a>
+      </section>
+    </main>
+  </body>
+</html>

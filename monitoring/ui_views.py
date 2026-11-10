@@ -338,7 +338,7 @@ def reports(request):
 
 @viewer_required
 def gpt(request):
-    configured = bool(settings.OPENAI_API_KEY)
+    configured = settings.OPENAI_ENABLED and bool(settings.OPENAI_API_KEY)
     form = GptForm(request.POST or None, request.FILES or None)
     if request.method == 'POST':
         require_editor(request.user)
@@ -361,7 +361,7 @@ def gpt(request):
                 return redirect('monitoring:import_detail', pk=batch.pk)
             except (ExtractionError, ConfigurationError, ValidationError) as exc:
                 form.add_error(None, _error_text(exc))
-    return render(request, 'monitoring/gpt.html', {'active': 'gpt', 'configured': configured, 'form': form, 'model_name': settings.OPENAI_MODEL if configured else ''})
+    return render(request, 'monitoring/gpt.html', {'active': 'gpt', 'configured': configured, 'external_enabled': settings.OPENAI_ENABLED, 'form': form, 'model_name': settings.OPENAI_MODEL if configured else ''})
 
 
 def csrf_failure(request, reason=''):

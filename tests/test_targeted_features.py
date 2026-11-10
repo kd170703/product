@@ -90,6 +90,21 @@ class TargetedWorkspaceTests(TestCase):
         self.assertEqual(query['period_year'],['2024'])
         self.assertEqual(query['period_quarter'],['4'])
 
+    def test_chart_builder_carries_the_applied_section_from_section_route(self):
+        sociology = self.make_indicator('TARGET-SOCIOLOGY-DEMO', section='sociology', name='Демо социология', unit='%')
+        fintest = self.make_indicator('TARGET-FINTEST-DEMO', section='fintest', name='Демо финтест', unit='%')
+        target = self.save_record(sociology)
+        self.save_record(fintest)
+        self.client.force_login(self.viewer)
+        response = self.client.get(reverse('monitoring:section', args=['sociology']), {'q':'Демо'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['filters']['section'], 'sociology')
+        self.assertContains(response, 'data-chart-section="sociology"')
+        payload = self.client.get(reverse('monitoring:chart_data'), {'q':'Демо', 'section':'sociology'}).json()
+        self.assertEqual(payload['observations_count'], 1)
+        self.assertEqual({chart['section'] for chart in payload['charts']}, {'sociology'})
+        self.assertEqual(payload['charts'][0]['observation_ids'], [target.pk])
+
     def test_chart_api_has_role_gate_and_never_uses_selected_ids_outside_filter(self):
         selected = self.save_record()
         outside = self.save_record(territory='Другая территория')
@@ -180,10 +195,10 @@ class TargetedWorkspaceTests(TestCase):
                 self.assertEqual(response.status_code,200)
                 self.assertNotIn('требует проверки',response.content.decode().casefold())
                 self.assertNotIn('требуют проверки',response.content.decode().casefold())
-                self.assertContains(response,'monitoring/mascot.png')
+                self.assertContains(response,'monitoring/mascot-256.webp')
         self.client.logout()
         response=self.client.get(reverse('login'))
-        self.assertContains(response,'monitoring/mascot.png')
+        self.assertContains(response,'monitoring/mascot-256.webp')
 
 
 class ChartSelectionUnitTests(SimpleTestCase):

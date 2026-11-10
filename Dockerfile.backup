@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1.7
+FROM restic/restic:0.18.0 AS restic
+
+# Keep pg_dump on the same major version as the production database.
+# The official PostgreSQL Alpine image already includes flock and tzdata.
+FROM postgres:17.6-alpine
+COPY --from=restic /usr/bin/restic /usr/local/bin/restic
+COPY docs/licenses/restic-BSD-2-Clause.txt /usr/local/share/licenses/restic/LICENSE
+COPY scripts/backup-*.sh /usr/local/bin/
+COPY scripts/restore-backup.sh /usr/local/bin/
+RUN sed -i 's/\r$//' /usr/local/bin/backup-*.sh /usr/local/bin/restore-backup.sh \
+    && chmod 0755 /usr/local/bin/backup-*.sh /usr/local/bin/restore-backup.sh
+ENV TZ=Europe/Moscow \
+    BACKUP_TIME=03:00 \
+    BACKUP_ROOT=/backups \
+    BACKUP_WORK=/work \
+    RESTIC_REPOSITORY=/backups/restic \
+    RESTIC_CACHE_DIR=/work/restic-cache \
+    BACKUP_HOST=financial-culture-monitoring \
+    PGCONNECT_TIMEOUT=10
+ENTRYPOINT ["/usr/local/bin/backup-entrypoint.sh"]
+CMD ["scheduler"]

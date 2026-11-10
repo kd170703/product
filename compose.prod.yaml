@@ -1,0 +1,190 @@
+name: product-prod
+
+x-application: &application
+  image: ${APP_IMAGE:-ghcr.io/kd170703/product:main}
+  environment:
+    DJANGO_DEBUG: '0'
+    DJANGO_SECRET_KEY_FILE: /run/secrets/django_secret_key
+    DJANGO_ALLOWED_HOSTS: ${APP_DOMAIN:?Задайте APP_DOMAIN в .env.prod},localhost,127.0.0.1
+    DJANGO_CSRF_TRUSTED_ORIGINS: https://${APP_DOMAIN:?Задайте APP_DOMAIN в .env.prod}
+    DJANGO_HTTPS: '1'
+    TRUST_PROXY: '1'
+    DJANGO_REQUIRE_2FA: '1'
+    DJANGO_AXES_FAILURE_LIMIT: '5'
+    DJANGO_AXES_COOLOFF_MINUTES: '30'
+    POSTGRES_DB: ${POSTGRES_DB:-product}
+    POSTGRES_USER: ${POSTGRES_USER:-product}
+    POSTGRES_HOST: db
+    POSTGRES_PORT: '5432'
+    POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+    OPENAI_ENABLED: ${OPENAI_ENABLED:-0}
+    OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    IMPORT_WATCH_DIR: /app/incoming
+    TZ: Europe/Moscow
+  secrets:
+    - django_secret_key
+    - db_password
+    - openai_api_key
+  volumes:
+    - media:/app/media
+    - staticfiles:/app/staticfiles
+    - ./incoming:/app/incoming:ro
+  read_only: true
+  tmpfs:
+    - /tmp:size=128m,mode=1777
+  restart: unless-stopped
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-product}
+      POSTGRES_USER: ${POSTGRES_USER:-product}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    <<: *application
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=4).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  worker:
+    <<: *application
+    command: ['python', 'manage.py', 'runworker', '--interval', '15']
+    networks:
+      - backend
+      - outbound
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Задайте APP_DOMAIN в .env.prod}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - frontend
+    depends_on:
+      web:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  backup:
+    image: ${BACKUP_IMAGE:-ghcr.io/kd170703/product-backup:main}
+    environment:
+      PGHOST: db
+      PGPORT: '5432'
+      PGDATABASE: ${POSTGRES_DB:-product}
+      PGUSER: ${POSTGRES_USER:-product}
+      PGPASSWORD_FILE: /run/secrets/db_password
+      RESTIC_PASSWORD_FILE: /run/secrets/backup_password
+      RESTIC_REPOSITORY: /backups/restic
+      BACKUP_TIME: ${BACKUP_TIME:-03:00}
+      TZ: ${BACKUP_TIMEZONE:-Europe/Moscow}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-30}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-12}
+    secrets:
+      - db_password
+      - backup_password
+    volumes:
+      - media:/media:ro
+      - ${BACKUP_DIRECTORY:-./backups-prod}:/backups
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /work:size=256m,mode=1777
+      - /tmp:size=32m,mode=1777
+    healthcheck:
+      test: ['CMD', '/usr/local/bin/backup-healthcheck.sh']
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+
+networks:
+  backend:
+    internal: true
+  frontend:
+  outbound:
+
+volumes:
+  pgdata:
+  media:
+  staticfiles:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  django_secret_key:
+    file: ./.secrets/django_secret_key
+  db_password:
+    file: ./.secrets/db_password
+  openai_api_key:
+    file: ./.secrets/openai_api_key
+  backup_password:
+    file: ./.secrets/backup_password

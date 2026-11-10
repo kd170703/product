@@ -1,0 +1,126 @@
+{% extends "monitoring/base.html" %}
+
+{% block title %}Защита входа{% endblock %}
+{% block content %}
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">УЧЁТНАЯ ЗАПИСЬ</p>
+      <h1>Защита входа</h1>
+      <p class="muted">Код из приложения дополняет пароль и защищает доступ к рабочим данным.</p>
+    </div>
+  </section>
+  {% if error %}<div class="notice notice-error" role="alert">{{ error }}</div>{% endif %}
+  <section class="panel account-security">
+    {% if recovery_codes %}
+      <div class="panel-heading">
+        <div>
+          <h2>Сохраните резервные коды</h2>
+          <p>Они показаны один раз. Каждый код действует для одного входа.</p>
+        </div>
+      </div>
+      <div class="content-pad">
+        <div class="notice">
+          Сохраните коды в защищённом хранилище отдельно от телефона. Прежние резервные коды больше не действуют.
+        </div>
+        <ul class="code-block">
+          {% for code in recovery_codes %}
+            <li>
+              <code>{{ code }}</code>
+            </li>
+          {% endfor %}
+        </ul>
+        <div class="form-actions">
+          <a class="button button-primary" href="{% url 'monitoring:dashboard' %}">К рабочим данным</a>
+        </div>
+      </div>
+    {% elif enrolled %}
+      <div class="panel-heading">
+        <div>
+          <h2>Двухфакторная защита подключена</h2>
+          <p>Осталось резервных кодов: {{ recovery_count }}.</p>
+        </div>
+      </div>
+      <div class="content-pad">
+        <p>
+          При входе используйте приложение-аутентификатор. Если телефон недоступен, выберите «Резервный код» на странице входа.
+        </p>
+        <h3>Выпустить новые резервные коды</h3>
+        <p class="muted">
+          Потребуются текущий пароль и новый код подтверждения. Все прежние резервные коды будут отменены.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="regenerate">
+          <div class="form-grid">
+            {% include "registration/security_fields.html" with form=recovery_form %}
+          </div>
+          <div class="form-actions">
+            <button class="button button-primary" type="submit">Выпустить 10 кодов</button>
+          </div>
+        </form>
+        <p class="muted">
+          Для смены или утраты телефона обратитесь к администратору. Отключение защиты доступно только через серверную процедуру восстановления.
+        </p>
+      </div>
+    {% elif pending %}
+      <div class="panel-heading">
+        <div>
+          <h2>Подключите приложение-аутентификатор</h2>
+          <p>Настройка действует 10 минут.</p>
+        </div>
+      </div>
+      <div class="content-pad">
+        <p>
+          Откройте приложение с поддержкой TOTP, добавьте учётную запись и отсканируйте QR-код. Подойдут, например, FreeOTP или Aegis.
+        </p>
+        <img src="{% url 'account_security_qr' %}"
+             width="256"
+             height="256"
+             alt="QR-код для подключения приложения-аутентификатора">
+        <details>
+          <summary>Ввести ключ вручную</summary>
+          <p class="code-block">
+            <code>{{ base32_key }}</code>
+          </p>
+          <p>Тип: TOTP, 6 цифр, интервал 30 секунд.</p>
+        </details>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="confirm">
+          <div class="form-grid">{% include "registration/security_fields.html" with form=token_form %}</div>
+          <div class="form-actions">
+            <button class="button button-primary" type="submit">Подтвердить и сохранить резервные коды</button>
+          </div>
+        </form>
+      </div>
+    {% else %}
+      <div class="panel-heading">
+        <div>
+          <h2>Подключить двухфакторную защиту</h2>
+          <p>
+            {% if required %}
+              Администратор сделал её обязательной для работы с данными.
+            {% else %}
+              Защита будет обязательной для вашей учётной записи после подключения.
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="content-pad">
+        <p>
+          Установите на телефон приложение-аутентификатор с поддержкой TOTP. SMS и номер телефона не требуются. Затем подтвердите пароль.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="start">
+          <div class="form-grid">
+            {% include "registration/security_fields.html" with form=password_form %}
+          </div>
+          <div class="form-actions">
+            <button class="button button-primary" type="submit">Начать подключение</button>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

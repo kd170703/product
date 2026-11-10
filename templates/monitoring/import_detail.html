@@ -1,7 +1,227 @@
-{% extends 'monitoring/base.html' %}{% block title %}Импорт № {{ batch.pk }}{% endblock %}{% block breadcrumb %}Предварительный просмотр{% endblock %}{% block content %}<div class="page-heading"><div><a class="back-link" href="{% url 'monitoring:imports' %}">← История импортов</a><div class="eyebrow">{% if batch.kind == 'gpt' %}ПРЕДЛОЖЕНИЯ GPT{% else %}ПРОВЕРКА ФАЙЛА{% endif %}</div><h1>Импорт № {{ batch.pk }}</h1><p class="page-description">{{ batch.created_at|date:'d.m.Y H:i' }} · {{ batch.created_by.username|default:'Фоновый процесс' }}{% if batch.source %} · {{ batch.source.name }}{% endif %}</p></div><div class="heading-actions"><span class="badge badge-{% if batch.status == 'confirmed' %}success{% elif batch.status == 'error' %}error{% else %}warning{% endif %}">{{ batch.get_status_display }}</span>{% if batch.file %}<a class="button button-secondary" href="{% url 'monitoring:download' 'batch' batch.pk 'original' %}">↓ Исходный файл</a>{% endif %}</div></div>
-<div class="stat-grid"><div class="stat-card"><span class="stat-icon stat-blue">▤</span><div><span class="stat-label">Записи в файле</span><strong>{{ observations_count }}</strong><small>до подтверждения</small></div></div><div class="stat-card"><span class="stat-icon stat-amber">!</span><div><span class="stat-label">Примечания</span><strong>{{ issues|length }}</strong><small>не выбираются автоматически</small></div></div><div class="stat-card"><span class="stat-icon stat-violet">≠</span><div><span class="stat-label">Ошибки структуры</span><strong>{{ errors|length }}</strong><small>требуют исправления</small></div></div><div class="stat-card"><span class="stat-icon stat-teal">✓</span><div><span class="stat-label">Новые версии</span><strong>{{ batch.result.versions_created|default:0 }}</strong><small>после подтверждения</small></div></div></div>
-{% if batch.status == 'error' %}<div class="notice notice-error">{{ batch.result.error }}</div>{% endif %}{% if batch.status == 'preview' %}<div class="notice notice-info">{% if batch.kind == 'gpt' %}Это предложения GPT, а не подтверждённые данные. Проверьте соответствие показателей, единицы, период, территорию и цитату. Неоднозначные записи требуют исправления или согласования перед записью.{% else %}Данные пока не внесены в реестр наблюдений. Замечания к источникам сохранятся вместе с версиями. Различия исходных значений сохраняются в примечаниях.{% endif %}</div>{% endif %}
-{% if errors %}<section class="panel" style="margin-bottom:22px"><div class="panel-heading"><h2>Ошибки, блокирующие импорт</h2></div><div class="content-pad"><ul class="issue-list">{% for error in errors|slice:':100' %}<li><strong>Запись {{ error.row }}.</strong> {{ error.message }}</li>{% endfor %}</ul>{% if errors|length > 100 %}<p class="help-text">Показаны первые 100 ошибок. Исправьте файл и повторите предварительный просмотр.</p>{% endif %}</div></section>{% endif %}
-{% if issues %}<section class="panel" style="margin-bottom:22px"><div class="panel-heading"><div><h2>Замечания и расхождения</h2><p>Полный список сохраняется в разделе «Источники и настройки → Примечания»</p></div></div><div class="content-pad"><details><summary class="content-text">Показать первые 50 из {{ issues|length }} замечаний</summary><ul class="issue-list">{% for issue in issues|slice:':50' %}<li>{% if issue.message %}<span class="code-inline">{{ issue.key|default:issue.code }}</span> {{ issue.message }}{% if issue.source %}<div class="cell-meta">{{ issue.source }}</div>{% endif %}{% else %}{{ issue }}{% endif %}</li>{% endfor %}</ul></details></div></section>{% endif %}
-<section class="panel"><div class="panel-heading"><div><h2>Предварительный просмотр записей</h2><p>{% if rows_limited %}Первые {{ preview_rows|length }} из {{ observations_count }} записей{% else %}{{ observations_count }} записей{% endif %}</p></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>№</th><th>Показатель / вопрос</th><th>Значение и единица</th><th>Период / территория</th><th>Источник</th><th>Замечания</th></tr></thead><tbody>{% for row in preview_rows %}<tr><td>{{ row.number }}</td><td class="indicator-cell"><strong>{{ row.indicator_name }}</strong>{% if row.answer %}<div class="cell-meta">{{ row.answer }}</div>{% endif %}{% if row.group %}<div class="cell-meta">{{ row.group }}</div>{% endif %}<div class="cell-meta">{{ row.indicator_code|default:row.indicator_key }}</div></td><td class="number-cell">{% if row.data_state == 'na' %}Неприменимо{% elif row.value == None %}Нет данных{% else %}<strong>{{ row.value }}</strong>{% endif %}<small>{{ row.unit|default:'Не уточнена' }}</small></td><td>{{ row.period_label }}<div class="cell-meta">{{ row.territory }}</div></td><td class="source-cell"><small>{{ row.source_display|truncatechars:250 }}</small></td><td>{% for issue in row.issues|slice:':3' %}<div class="cell-meta">{{ issue }}</div>{% empty %}<span class="muted">—</span>{% endfor %}</td></tr>{% empty %}<tr><td colspan="6"><div class="empty-state"><h3>Записи не распознаны</h3><p>Проверьте вид файла и соответствие полей загрузчика.</p></div></td></tr>{% endfor %}</tbody></table></div></section>
-{% if batch.status == 'preview' and can_edit %}<div class="review-actions"><form method="post" data-confirm="Подтвердить импорт {{ observations_count }} записей? Исходные версии сохранятся.">{% csrf_token %}<input type="hidden" name="action" value="confirm"><button class="button button-primary" type="submit" {% if errors or not observations_count %}disabled{% endif %}>Подтвердить импорт</button></form><a class="button button-secondary" href="{% url 'monitoring:imports' %}">Загрузить исправленный файл</a></div>{% endif %}{% if batch.status == 'confirmed' %}<div class="review-actions"><a class="button button-primary" href="{% url 'monitoring:dashboard' %}">Открыть мониторинг →</a><a class="button button-secondary" href="{% url 'monitoring:sources' %}?tab=issues">Примечания</a></div>{% endif %}{% if preview_page.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Страницы предварительного просмотра">{% if preview_page.has_previous %}<a class="button button-secondary button-small" href="?page={{ preview_page.previous_page_number }}">← Назад</a>{% endif %}<span>Страница {{ preview_page.number }} из {{ preview_page.paginator.num_pages }} · {{ observations_count }} наблюдений</span>{% if preview_page.has_next %}<a class="button button-secondary button-small" href="?page={{ preview_page.next_page_number }}">Далее →</a>{% endif %}</nav>{% endif %}<p class="help-text">Полные записи и все {{ issue_total }} замечаний: <a href="{% url 'monitoring:download' 'batch' batch.pk 'preview' %}">скачать предварительный просмотр JSON</a>. На странице показано до 100 замечаний.</p>{% endblock %}
+{% extends 'monitoring/base.html' %}
+
+{% block title %}Импорт № {{ batch.pk }}{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <a class="back-link" href="{% url 'monitoring:imports' %}">{% icon 'arrow-left' %} История импортов</a>
+      <div class="eyebrow">
+        {% if batch.kind == 'gpt' %}
+          ПРЕДЛОЖЕНИЯ GPT
+        {% else %}
+          ПРОВЕРКА ФАЙЛА
+        {% endif %}
+      </div>
+      <h1>Импорт № {{ batch.pk }}</h1>
+      <p class="page-description">
+        {{ batch.created_at|date:'d.m.Y H:i' }} · {{ batch.created_by.username|default:'Фоновый процесс' }}
+        {% if batch.source %}· {{ batch.source.name }}{% endif %}
+      </p>
+    </div>
+    <div class="heading-actions">
+      <span class="badge badge-{% if batch.status == 'confirmed' %}success{% elif batch.status == 'error' %}error{% else %}warning{% endif %}">{{ batch.get_status_display }}</span>
+      {% if batch.file %}
+        <a class="button button-secondary"
+           href="{% url 'monitoring:download' 'batch' batch.pk 'original' %}">{% icon 'download' %} Исходный файл</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <span class="stat-icon stat-blue">{% icon 'report' %}</span>
+      <div>
+        <span class="stat-label">Записи в файле</span><strong>{{ observations_count }}</strong><small>до подтверждения</small>
+      </div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon stat-amber">!</span>
+      <div>
+        <span class="stat-label">Примечания</span><strong>{{ issues|length }}</strong><small>не выбираются автоматически</small>
+      </div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon stat-violet">≠</span>
+      <div>
+        <span class="stat-label">Ошибки структуры</span><strong>{{ errors|length }}</strong><small>требуют исправления</small>
+      </div>
+    </div>
+    <div class="stat-card">
+      <span class="stat-icon stat-teal">{% icon 'check' %}</span>
+      <div>
+        <span class="stat-label">Новые версии</span><strong>{{ batch.result.versions_created|default:0 }}</strong><small>после подтверждения</small>
+      </div>
+    </div>
+  </div>
+  {% if batch.status == 'error' %}
+    <div class="notice notice-error">{{ batch.result.error }}</div>
+  {% endif %}
+  {% if batch.status == 'preview' %}
+    <div class="notice notice-info">
+      {% if batch.kind == 'gpt' %}
+        Это предложения GPT, а не подтверждённые данные. Проверьте соответствие показателей, единицы, период, территорию и цитату. Неоднозначные записи требуют исправления или согласования перед записью.
+      {% else %}
+        Данные пока не внесены в реестр наблюдений. Замечания к источникам сохранятся вместе с версиями. Различия исходных значений сохраняются в примечаниях.
+      {% endif %}
+    </div>
+  {% endif %}
+  {% if errors %}
+    <section class="panel panel-spaced-after">
+      <div class="panel-heading">
+        <h2>Ошибки, блокирующие импорт</h2>
+      </div>
+      <div class="content-pad">
+        <ul class="issue-list">
+          {% for error in errors|slice:':100' %}
+            <li>
+              <strong>Запись {{ error.row }}.</strong> {{ error.message }}
+            </li>
+          {% endfor %}
+        </ul>
+        {% if errors|length > 100 %}
+          <p class="help-text">
+            Показаны первые 100 ошибок. Исправьте файл и повторите предварительный просмотр.
+          </p>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+  {% if issues %}
+    <section class="panel panel-spaced-after">
+      <div class="panel-heading">
+        <div>
+          <h2>Замечания и расхождения</h2>
+          <p>
+            Полный список сохраняется в разделе «Источники и настройки {% icon 'arrow-right' %} Примечания»
+          </p>
+        </div>
+      </div>
+      <div class="content-pad">
+        <details>
+          <summary class="content-text">Показать первые 50 из {{ issues|length }} замечаний</summary>
+          <ul class="issue-list">
+            {% for issue in issues|slice:':50' %}
+              <li>
+                {% if issue.message %}
+                  <span class="code-inline">{{ issue.key|default:issue.code }}</span> {{ issue.message }}
+                  {% if issue.source %}<div class="cell-meta">{{ issue.source }}</div>{% endif %}
+                {% else %}
+                  {{ issue }}
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
+      </div>
+    </section>
+  {% endif %}
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Предварительный просмотр записей</h2>
+        <p>
+          {% if rows_limited %}
+            Первые {{ preview_rows|length }} из {{ observations_count }} записей
+          {% else %}
+            {{ observations_count }} записей
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Показатель / вопрос</th>
+            <th>Значение и единица</th>
+            <th>Период / территория</th>
+            <th>Источник</th>
+            <th>Замечания</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview_rows %}
+            <tr>
+              <td>{{ row.number }}</td>
+              <td class="indicator-cell">
+                <strong>{{ row.indicator_name }}</strong>
+                {% if row.answer %}<div class="cell-meta">{{ row.answer }}</div>{% endif %}
+                {% if row.group %}<div class="cell-meta">{{ row.group }}</div>{% endif %}
+                <div class="cell-meta">{{ row.indicator_code|default:row.indicator_key }}</div>
+              </td>
+              <td class="number-cell">
+                {% if row.data_state == 'na' %}
+                  Неприменимо
+                {% elif row.value == None %}
+                  Нет данных
+                {% else %}
+                  <strong>{{ row.value }}</strong>
+                {% endif %}
+                <small>{{ row.unit|default:'Не уточнена' }}</small>
+              </td>
+              <td>
+                {{ row.period_label }}
+                <div class="cell-meta">{{ row.territory }}</div>
+              </td>
+              <td class="source-cell">
+                <small>{{ row.source_display|truncatechars:250 }}</small>
+              </td>
+              <td>
+                {% for issue in row.issues|slice:':3' %}
+                  <div class="cell-meta">{{ issue }}</div>
+                  {% empty %}<span class="muted">—</span>
+                {% endfor %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6">
+                <div class="empty-state">
+                  <h3>Записи не распознаны</h3>
+                  <p>Проверьте вид файла и соответствие полей загрузчика.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% if batch.status == 'preview' and can_edit %}
+    <div class="review-actions">
+      <form method="post"
+            data-confirm="Подтвердить импорт {{ observations_count }} записей? Исходные версии сохранятся.">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="confirm">
+        <button class="button button-primary"
+                type="submit"
+                {% if errors or not observations_count %}disabled{% endif %}>
+          Подтвердить импорт
+        </button>
+      </form>
+      <a class="button button-secondary" href="{% url 'monitoring:imports' %}">Загрузить исправленный файл</a>
+    </div>
+  {% endif %}
+  {% if batch.status == 'confirmed' %}
+    <div class="review-actions">
+      <a class="button button-primary" href="{% url 'monitoring:dashboard' %}">Открыть мониторинг {% icon 'arrow-right' %}</a><a class="button button-secondary"
+   href="{% url 'monitoring:sources' %}?tab=issues">Примечания</a>
+    </div>
+  {% endif %}
+  {% if preview_page.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="Страницы предварительного просмотра">
+      {% if preview_page.has_previous %}
+        <a class="button button-secondary button-small"
+           href="?page={{ preview_page.previous_page_number }}">{% icon 'arrow-left' %} Назад</a>
+      {% endif %}
+      <span>Страница {{ preview_page.number }} из {{ preview_page.paginator.num_pages }} · {{ observations_count }} наблюдений</span>
+      {% if preview_page.has_next %}
+        <a class="button button-secondary button-small"
+           href="?page={{ preview_page.next_page_number }}">Далее {% icon 'arrow-right' %}</a>
+      {% endif %}
+    </nav>
+  {% endif %}
+  <p class="help-text">
+    Полные записи и все {{ issue_total }} замечаний: <a href="{% url 'monitoring:download' 'batch' batch.pk 'preview' %}">скачать предварительный просмотр JSON</a>. На странице показано до 100 замечаний.
+  </p>
+{% endblock %}

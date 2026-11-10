@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Django, styles and templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_DB: product
+          POSTGRES_USER: product
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U product -d product"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-production-secret
+      DJANGO_DEBUG: '0'
+      POSTGRES_DB: product
+      POSTGRES_USER: product
+      POSTGRES_PASSWORD: ci-only-password
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      OPENAI_API_KEY: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install frontend tools
+        run: npm ci
+      - name: Check styles and formatting
+        run: npm run check
+      - name: Check Django templates
+        run: djlint templates --check
+      - name: Check Django configuration and migrations
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py collectstatic --noinput
+      - name: Run tests
+        run: python manage.py test tests --noinput
+      - name: Validate production Compose and Caddy configuration
+        run: sh scripts/ci-production-smoke.sh config
+
+  publish:
+    name: Publish checked server images
+    needs: check
+    if: >-
+      github.repository == 'kd170703/product' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish application
+        id: application
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/kd170703/product:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=Мониторинг финансовой культуры
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=application
+          cache-to: type=gha,mode=max,scope=application
+          provenance: mode=min
+      - name: Build and publish backup service
+        id: backup
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.backup
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/kd170703/product-backup:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=Зашифрованные резервные копии мониторинга
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=backup
+          cache-to: type=gha,mode=max,scope=backup
+          provenance: mode=min
+      - name: Smoke-test production images and restore a synthetic backup
+        env:
+          APP_IMAGE: ghcr.io/kd170703/product@${{ steps.application.outputs.digest }}
+          BACKUP_IMAGE: ghcr.io/kd170703/product-backup@${{ steps.backup.outputs.digest }}
+        run: sh scripts/ci-production-smoke.sh images
+      - name: Update main tags after both images are published
+        env:
+          APPLICATION_DIGEST: ${{ steps.application.outputs.digest }}
+          BACKUP_DIGEST: ${{ steps.backup.outputs.digest }}
+        run: |
+          docker buildx imagetools create --tag ghcr.io/kd170703/product:main "ghcr.io/kd170703/product@${APPLICATION_DIGEST}"
+          docker buildx imagetools create --tag ghcr.io/kd170703/product-backup:main "ghcr.io/kd170703/product-backup@${BACKUP_DIGEST}"
+      - name: Record immutable image references
+        env:
+          APPLICATION_DIGEST: ${{ steps.application.outputs.digest }}
+          BACKUP_DIGEST: ${{ steps.backup.outputs.digest }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo '## Готовые образы сервера'
+            echo
+            echo 'Опубликованы после успешных проверок. Для сервера зафиксируйте одну пару SHA или digest.'
+            echo
+            echo '```dotenv'
+            echo "APP_IMAGE=ghcr.io/kd170703/product:sha-${COMMIT_SHA}"
+            echo "BACKUP_IMAGE=ghcr.io/kd170703/product-backup:sha-${COMMIT_SHA}"
+            echo '```'
+            echo
+            echo '```dotenv'
+            echo "APP_IMAGE=ghcr.io/kd170703/product@${APPLICATION_DIGEST}"
+            echo "BACKUP_IMAGE=ghcr.io/kd170703/product-backup@${BACKUP_DIGEST}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

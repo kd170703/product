@@ -1,11 +1,16 @@
 .venv/
 .env
+.env.prod
+.env.prod.*
+!.env.prod.example
+.secrets/
 __pycache__/
 *.py[cod]
 media/
 staticfiles/
 incoming/
 backups/
+backups-prod/
 work/
 data/source/
 data/normalized_registry.json
@@ -14,3 +19,5 @@ docs/source-audit.md
 *.log
 .coverage
 data/source_discrepancies.json
+
+node_modules/

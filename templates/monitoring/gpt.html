@@ -1,1 +1,88 @@
-{% extends 'monitoring/base.html' %}{% block title %}Помощник GPT{% endblock %}{% block breadcrumb %}Помощник GPT{% endblock %}{% block content %}<div class="page-heading"><div><div class="eyebrow">ИЗВЛЕЧЕНИЕ ИЗ ПУБЛИКАЦИЙ</div><h1>Помощник GPT</h1><p class="page-description">Извлечение структурированных записей с проверкой и подтверждением сотрудника.</p></div><span class="badge badge-{% if configured %}success{% else %}neutral{% endif %}">{% if configured %}Подключён · {{ model_name }}{% else %}Требуется настройка{% endif %}</span></div>{% if not configured %}<div class="notice notice-info"><strong>Панель GPT ещё не настроена.</strong> Администратор должен указать ключ OpenAI и модель в серверных настройках. Импорт, редактирование данных, мониторинг и отчёты работают независимо от GPT.</div>{% endif %}<div class="two-column"><section class="panel"><div class="panel-heading"><h2>Документ или текст</h2></div><div class="content-pad">{% if can_edit %}<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.non_field_errors }}<div class="form-grid">{% for field in form %}<div class="form-field form-field-wide"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}</div><div class="form-actions"><button class="button button-primary" type="submit" {% if not configured %}disabled{% endif %}><span aria-hidden="true">✦</span> Извлечь предложения</button></div></form>{% else %}<p class="help-text">Для извлечения и добавления данных нужна роль редактора.</p>{% endif %}</div></section><aside class="panel"><div class="panel-heading"><h2>От текста к записи</h2></div><div class="content-pad"><ol class="content-text" style="padding-left:18px;margin:0"><li><strong>Извлечение.</strong> Выбранный документ или текст отправляется в OpenAI через сервер.</li><li style="margin-top:15px"><strong>Сопоставление.</strong> Помощник предлагает существующие показатели и сохраняет цитату из источника.</li><li style="margin-top:15px"><strong>Проверка.</strong> Вы просматриваете период, единицы, территорию, ссылки и неоднозначности.</li><li style="margin-top:15px"><strong>Подтверждение.</strong> Приложение проверяет обязательные поля и права и только затем создаёт версии данных.</li></ol><div class="consistency-note">Расчёты выполняет программный код. Числа правильных ответов не восстанавливаются из округлённых процентов.</div></div></aside></div>{% endblock %}
+{% extends 'monitoring/base.html' %}
+
+{% block title %}Помощник GPT{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow">ИЗВЛЕЧЕНИЕ ИЗ ПУБЛИКАЦИЙ</div>
+      <h1>Помощник GPT</h1>
+      <p class="page-description">
+        Извлечение структурированных записей с проверкой и подтверждением сотрудника.
+      </p>
+    </div>
+    <span class="badge badge-{% if configured %}success{% else %}neutral{% endif %}">
+      {% if configured %}
+        Подключён · {{ model_name }}
+      {% else %}
+        Требуется настройка
+      {% endif %}
+    </span>
+  </div>
+  {% if not configured %}
+    <div class="notice notice-info">
+      {% if not external_enabled %}
+        <strong>Внешний API GPT отключён администратором.</strong> Для подключения нужны настройка OPENAI_ENABLED и решение оператора о передаваемых данных.
+      {% else %}
+        <strong>Панель GPT ещё не настроена.</strong> Администратор должен указать ключ OpenAI и модель в серверных настройках.
+      {% endif %}
+      Импорт, редактирование данных, мониторинг и отчёты работают независимо от GPT.
+    </div>
+  {% endif %}
+  <div class="two-column">
+    <section class="panel">
+      <div class="panel-heading">
+        <h2>Документ или текст</h2>
+      </div>
+      <div class="content-pad">
+        {% if can_edit %}
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}{{ form.non_field_errors }}
+            <div class="form-grid">
+              {% for field in form %}
+                <div class="form-field form-field-wide">
+                  <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                  {{ field }}
+                  {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+                  {{ field.errors }}
+                </div>
+              {% endfor %}
+            </div>
+            <div class="form-actions">
+              <button class="button button-primary"
+                      type="submit"
+                      {% if not configured %}disabled{% endif %}>
+                <span aria-hidden="true">{% icon 'sparkles' %}</span> Извлечь предложения
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <p class="help-text">Для извлечения и добавления данных нужна роль редактора.</p>
+        {% endif %}
+      </div>
+    </section>
+    <aside class="panel">
+      <div class="panel-heading">
+        <h2>От текста к записи</h2>
+      </div>
+      <div class="content-pad">
+        <ol class="content-text workflow-steps">
+          <li>
+            <strong>Извлечение.</strong> Выбранный документ или текст отправляется в OpenAI через сервер.
+          </li>
+          <li class="note-spaced">
+            <strong>Сопоставление.</strong> Помощник предлагает существующие показатели и сохраняет цитату из источника.
+          </li>
+          <li class="note-spaced">
+            <strong>Проверка.</strong> Вы просматриваете период, единицы, территорию, ссылки и неоднозначности.
+          </li>
+          <li class="note-spaced">
+            <strong>Подтверждение.</strong> Приложение проверяет обязательные поля и права и только затем создаёт версии данных.
+          </li>
+        </ol>
+        <div class="consistency-note">
+          Расчёты выполняет программный код. Числа правильных ответов не восстанавливаются из округлённых процентов.
+        </div>
+      </div>
+    </aside>
+  </div>
+{% endblock %}

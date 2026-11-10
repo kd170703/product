@@ -1,0 +1,17 @@
+{
+  "name": "financial-culture-monitoring",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Development tools for the financial culture monitoring interface",
+  "scripts": {
+    "format": "prettier --write \"static/monitoring/**/*.{css,js,svg}\" package.json .prettierrc.json .stylelintrc.json \".github/workflows/*.yml\"",
+    "format:check": "prettier --check \"static/monitoring/**/*.{css,js,svg}\" package.json .prettierrc.json .stylelintrc.json \".github/workflows/*.yml\"",
+    "lint:css": "stylelint \"static/monitoring/**/*.css\"",
+    "check": "npm run format:check && npm run lint:css && node --check static/monitoring/app.js"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "stylelint": "16.25.0",
+    "stylelint-config-standard": "39.0.1"
+  }
+}

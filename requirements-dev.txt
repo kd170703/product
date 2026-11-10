@@ -1,0 +1,12 @@
+-r requirements.txt
+click==8.5.1
+colorama==0.4.6
+cssbeautifier==2.0.3
+djlint==1.36.4
+EditorConfig==0.17.1
+jsbeautifier==2.0.3
+json5==0.17.3
+pathspec==1.1.1
+PyYAML==6.0.3
+regex==2026.11.9
+tqdm==4.70.1

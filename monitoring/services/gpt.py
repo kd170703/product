@@ -267,6 +267,8 @@ def validate_proposals(payload, indicators):
 
 def extract_records(text, instruction, indicators):
     from django.conf import settings
+    if not settings.OPENAI_ENABLED:
+        raise ConfigurationError("Внешний API GPT отключён администратором. Для подключения требуется OPENAI_ENABLED=1 и решение оператора о передаваемых данных.")
     key = getattr(settings, "OPENAI_API_KEY", "")
     model = getattr(settings, "OPENAI_MODEL", "")
     if not key:
