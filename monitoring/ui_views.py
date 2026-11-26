@@ -21,15 +21,6 @@ from .forms import (IndicatorForm, ObservationForm, SourceForm, CorrectionForm, 
 from .services.observations import require_editor, upsert_observation, apply_correction, resolve_correction
 from .services.selectors import filtered_observations, dashboard_payload
 
-SECTION_DESCRIPTIONS = {
-    'sociology': 'Результаты исследований, распределения ответов и волны опросов.',
-    'fintest': 'Опубликованные результаты по вопросам, темам и сопоставимым периодам.',
-    'statistics': 'Официальная статистика: динамика, периоды и исходные публикации.',
-    'irfk': 'Компоненты индекса и версии методики расчёта финансовой культуры.',
-    'quiz': 'Результаты онлайн-зачёта по финансовой грамотности.',
-}
-
-
 def viewer_required(view):
     @wraps(view)
     @login_required
@@ -79,15 +70,33 @@ def dashboard(request, section=None):
         from django.http import Http404
         raise Http404('Раздел не найден.')
     filters = _filters(request.GET)
-    if section:filters['section']=section
+    if section:
+        filters['section'] = section
     payload = dashboard_payload(filters, section)
-    rows = payload.get('rows')
-    if rows is None:
-        rows = filtered_observations(filters, section)
+    rows = payload['rows']
     page = Paginator(rows, 50).get_page(request.GET.get('page'))
-    query = request.GET.copy()
-    query.pop('page', None)
-    context = {**payload, **_filter_context(filters), 'active': section or 'dashboard', 'page_title': dict(SECTIONS).get(section, 'Обзор мониторинга'), 'page_description': SECTION_DESCRIPTIONS.get(section, 'Данные, источники и квартальные отчёты в одном рабочем пространстве.'), 'rows': list(page.object_list), 'page_obj': page, 'pagination_query':query.urlencode(),'report_query':urlencode({k:v for k,v in filters.items() if not k.startswith('_')}),'rows_limited':False}
+    chart_page = Paginator(payload['charts'], 4).get_page(request.GET.get('chart_page'))
+    table_query = request.GET.copy()
+    table_query.pop('page', None)
+    chart_query = request.GET.copy()
+    chart_query.pop('chart_page', None)
+    context = {
+        **payload,
+        **_filter_context(filters),
+        'active': section or 'dashboard',
+        'page_title': dict(SECTIONS).get(section, 'Обзор мониторинга'),
+        'dashboard_has_filters': any(
+            v and not (k == 'period_mode' and v == 'all')
+            for k, v in filters.items() if k != 'section' or not section
+        ),
+        'rows': page.object_list,
+        'page_obj': page,
+        'pagination_query': table_query.urlencode(),
+        'chart_page': chart_page,
+        'chart_pagination_query': chart_query.urlencode(),
+        'charts': [{k: v for k, v in chart.items() if k != 'rows'} for chart in chart_page],
+        'report_query': urlencode({k: v for k, v in filters.items() if not k.startswith('_')}),
+    }
     if section == 'fintest':
         accuracy = payload.get('accuracy', {})
         context['limitation'] = accuracy.get('limitation') or ('Сводная доля правильных ответов: ' + str(accuracy.get('display', '')) + ' %. Расчёт по точным числителям и знаменателям.')

@@ -43,7 +43,6 @@
   --inverse: #fff;
   --inverse-muted: #c4d0df;
   --inverse-subtle: #b4c3d5;
-  --nav-active: #2a4565;
   --focus: #124d9d;
   --chart-series-1: #2455b4;
   --chart-series-2: #087b71;
@@ -66,7 +65,7 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-  --sidebar-width: 272px;
+  --sidebar-width: 236px;
   --topbar-height: 56px;
   --control-height: 44px;
   --shadow: 0 2px 9px rgb(32 60 91 / 4%);
@@ -158,7 +157,6 @@ textarea {
   outline: 3px solid var(--focus);
 }
 
-.sidebar :focus-visible,
 .login-intro :focus-visible {
   outline-color: var(--inverse);
 }

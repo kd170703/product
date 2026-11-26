@@ -1,0 +1,17 @@
+<label class="filter-field">
+  Тематический раздел
+  <select name="topic">
+    <option value="">Все темы</option>
+    {% for topic in topics %}
+      <option value="{{ topic.slug }}"
+              {% if filters.topic == topic.slug %}selected{% endif %}>{{ topic.name }}</option>
+    {% endfor %}
+  </select>
+</label>
+<label class="filter-field">
+  Территория
+  <input name="territory"
+         value="{{ filters.territory|default:'' }}"
+         placeholder="Все территории"
+         list="territories">
+</label>

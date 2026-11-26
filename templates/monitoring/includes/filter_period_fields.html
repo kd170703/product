@@ -1,0 +1,65 @@
+<label class="filter-field">
+  Период
+  <select name="period_mode" id="period-mode">
+    <option value="all"
+            {% if filters.period_mode == 'all' or not filters.period_mode %}selected{% endif %}>
+      Все периоды
+    </option>
+    <option value="quarter"
+            {% if filters.period_mode == 'quarter' %}selected{% endif %}>Квартал</option>
+    <option value="year"
+            {% if filters.period_mode == 'year' %}selected{% endif %}>Год</option>
+    <option value="date"
+            {% if filters.period_mode == 'date' %}selected{% endif %}>Диапазон дат</option>
+  </select>
+</label>
+<label class="filter-field period-field"
+       data-period-modes="quarter year"
+       {% if filters.period_mode != 'quarter' and filters.period_mode != 'year' %}hidden{% endif %}>
+  Год
+  <select name="period_year" id="period-year">
+    <option value="">Выберите год</option>
+    {% for year in period_years %}
+      <option value="{{ year }}"
+              {% if filters.period_year|stringformat:'s' == year|stringformat:'s' %}selected{% endif %}>
+        {{ year }} год
+      </option>
+    {% endfor %}
+  </select>
+</label>
+<label class="filter-field period-field"
+       data-period-modes="quarter"
+       {% if filters.period_mode != 'quarter' %}hidden{% endif %}>
+  Квартал
+  <select name="period_quarter" id="period-quarter">
+    <option value="">Выберите квартал</option>
+    <option value="1" {% if filters.period_quarter == '1' %}selected{% endif %}>
+      I квартал
+      {% if not compact_filters %}· январь–март{% endif %}
+    </option>
+    <option value="2" {% if filters.period_quarter == '2' %}selected{% endif %}>
+      II квартал
+      {% if not compact_filters %}· апрель–июнь{% endif %}
+    </option>
+    <option value="3" {% if filters.period_quarter == '3' %}selected{% endif %}>
+      III квартал
+      {% if not compact_filters %}· июль–сентябрь{% endif %}
+    </option>
+    <option value="4" {% if filters.period_quarter == '4' %}selected{% endif %}>
+      IV квартал
+      {% if not compact_filters %}· октябрь–декабрь{% endif %}
+    </option>
+  </select>
+</label>
+<label class="filter-field filter-date period-field"
+       data-period-modes="date"
+       {% if filters.period_mode != 'date' %}hidden{% endif %}>
+  Начало периода
+  <input type="date" name="start" value="{{ filters.start|default:'' }}">
+</label>
+<label class="filter-field filter-date period-field"
+       data-period-modes="date"
+       {% if filters.period_mode != 'date' %}hidden{% endif %}>
+  Конец периода
+  <input type="date" name="end" value="{{ filters.end|default:'' }}">
+</label>

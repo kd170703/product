@@ -1,0 +1,7 @@
+<label class="filter-field filter-search">
+  Поиск
+  <input type="search"
+         name="q"
+         value="{{ filters.q|default:'' }}"
+         placeholder="{% if compact_filters %}Показатель или вопрос{% else %}Название показателя или вопрос{% endif %}">
+</label>

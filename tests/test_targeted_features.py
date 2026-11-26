@@ -5,6 +5,7 @@ Every fixture is synthetic; no owner's workbook or mascot bytes are embedded.
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import parse_qs
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -84,7 +85,6 @@ class TargetedWorkspaceTests(TestCase):
     def test_report_link_keeps_section_and_quarter_from_dashboard(self):
         self.client.force_login(self.viewer)
         response=self.client.get(reverse('monitoring:section',args=['fintest']),{'period_mode':'quarter','period_year':'2024','period_quarter':'4'})
-        from urllib.parse import parse_qs
         query=parse_qs(response.context['report_query'])
         self.assertEqual(query['section'],['fintest'])
         self.assertEqual(query['period_year'],['2024'])
@@ -130,6 +130,28 @@ class TargetedWorkspaceTests(TestCase):
         self.assertEqual(payload['observations_count'],10)
         self.assertTrue(all(c['dynamic'] and c['kind']=='line' for c in payload['charts']))
         self.assertTrue(all(len(c['labels'])==2 for c in payload['charts']))
+
+    def test_dashboard_chart_pages_expose_all_matching_charts_and_keep_filters(self):
+        codes = [f'TARGET-OVERVIEW-{n}' for n in range(6)]
+        for code in codes:
+            self.save_record(self.make_indicator(code))
+        self.save_record(self.make_indicator('TARGET-OVERVIEW-FINTEST', section='fintest'))
+        self.client.force_login(self.viewer)
+
+        url = reverse('monitoring:section', args=['statistics'])
+        filters = {'q': 'OVERVIEW', 'territory': 'Тестовая территория', 'page': '1'}
+        first = self.client.get(url, filters)
+        self.assertEqual(first.context['chart_page'].paginator.count, 6)
+        self.assertEqual(parse_qs(first.context['chart_pagination_query']), {
+            key: [value] for key, value in filters.items()
+        })
+        second = self.client.get(url, {**filters, 'chart_page': '2'})
+        self.assertEqual(parse_qs(second.context['pagination_query'])['chart_page'], ['2'])
+        self.assertEqual(len(second.context['rows']), 6)
+        self.assertEqual([
+            chart['indicator_code'] for response in (first, second)
+            for chart in response.context['charts']
+        ], codes)
 
     def test_delete_requires_explicit_post_and_delete_permission(self):
         self.save_record()

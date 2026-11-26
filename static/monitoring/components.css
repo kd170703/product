@@ -525,15 +525,6 @@
   background: var(--blue-soft);
 }
 
-.reading-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-  color: var(--muted-2);
-  font-size: var(--fs-xs);
-}
-
 .table-note {
   padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--line);

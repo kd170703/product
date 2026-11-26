@@ -1,0 +1,86 @@
+.dashboard-filters {
+  padding: var(--space-4);
+  box-shadow: none;
+}
+
+.dashboard-filter-row,
+.dashboard-filter-options,
+.dashboard-filter-actions,
+.dashboard-filter-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.dashboard-filters .filter-field {
+  min-width: 0;
+  flex: 1 1 min(100%, 9.25rem);
+  gap: var(--space-1);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.dashboard-filters .filter-search {
+  flex: 3 1 min(100%, 12rem);
+}
+
+.dashboard-filters .filter-field :is(input, select) {
+  padding-block: var(--space-2);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+.dashboard-filters .filter-field select {
+  padding-inline: var(--space-3) var(--space-1);
+}
+
+.dashboard-filter-scope {
+  margin-top: var(--space-2);
+}
+
+.dashboard-filter-options:has(details[open]) {
+  flex: 1 1 100%;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.dashboard-filter-details[open] {
+  flex: 1 1 min(100%, 25rem);
+}
+
+.dashboard-filter-details > summary {
+  width: fit-content;
+  min-height: var(--control-height);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--blue);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.dashboard-filter-details > summary:hover {
+  background: var(--blue-soft);
+}
+
+.dashboard-filter-actions {
+  gap: var(--space-2);
+}
+
+.dashboard-filter-actions .filter-apply {
+  width: auto;
+}
+
+.dashboard-filter-actions .filter-reset {
+  margin: 0;
+}
+
+@media (width <= 560px) {
+  .dashboard-filters .filter-search,
+  .dashboard-filter-options {
+    flex-basis: 100%;
+  }
+}
