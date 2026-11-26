@@ -2,4 +2,6 @@
 @import url('./base.css');
 @import url('./layout.css');
 @import url('./components.css');
+@import url('./dashboard-filters.css');
 @import url('./charts.css');
+@import url('./dashboard.css');

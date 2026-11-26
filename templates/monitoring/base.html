@@ -14,8 +14,8 @@
           sizes="64x64"
           href="{% static 'monitoring/favicon-64.png' %}?v=20261110a11y-a11y">
     <link rel="stylesheet"
-          href="{% static 'monitoring/app.css' %}?v=20261110a11y-a11y">
-    <script defer src="{% static 'monitoring/app.js' %}?v=20261110a11y-a11y"></script>
+          href="{% static 'monitoring/app.css' %}?v=20261126-dashboard">
+    <script defer src="{% static 'monitoring/app.js' %}?v=20261126-dashboard"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Перейти к содержимому</a>
@@ -26,12 +26,12 @@
             <img src="{% static 'monitoring/mascot-256.webp' %}"
                  width="48"
                  height="48"
-                 alt="Маскот Центра финансовой грамотности — лис"
+                 alt=""
                  decoding="async">
           </span>
           <span>Финансовая
             <br>
-            <b>культура</b><small>Центр финансовой грамотности</small></span>
+          культура</span>
         </a>
         <div class="nav-label">Мониторинг</div>
         <nav class="main-nav" aria-label="Разделы мониторинга">
@@ -59,9 +59,7 @@
           <a href="{% url 'monitoring:sources' %}"
              {% if active == 'sources' %}class="active" aria-current="page"{% endif %}>{% icon 'settings' %} Источники и настройки</a>
         </nav>
-        <div class="sidebar-bottom">
-          Центр финансовой грамотности<small>Внутренний сервис мониторинга</small>
-        </div>
+        <div class="sidebar-bottom">Центр финансовой грамотности</div>
       </aside>
       <div class="workspace">
         <header class="topbar">
@@ -70,18 +68,23 @@
                   aria-controls="sidebar"
                   aria-expanded="false"
                   aria-label="Открыть меню">{% icon 'menu' %}</button>
-          <span class="topbar-app-name">Мониторинг финансовой культуры</span>
-          <div class="account">
-            {% if user.is_authenticated %}
-              <span class="avatar" aria-hidden="true">{{ user.username|first|upper }}</span>
-              <span class="account-name">{{ user.get_full_name|default:user.username }}</span>
-              <a class="text-button" href="{% url 'account_security' %}">Защита входа</a>
-              <form method="post" action="{% url 'logout' %}">
-                {% csrf_token %}
-                <button class="text-button" type="submit">Выйти</button>
-              </form>
-            {% endif %}
-          </div>
+          <span class="topbar-app-name">Мониторинг</span>
+          {% if user.is_authenticated %}
+            <details class="account">
+              <summary class="account-toggle">
+                <span class="avatar" aria-hidden="true">{{ user.username|first|upper }}</span>
+                <span class="account-name">{{ user.get_full_name|default:user.username }}</span>
+                <span class="sr-only">Меню аккаунта</span>
+              </summary>
+              <div class="account-menu">
+                <a class="text-button" href="{% url 'account_security' %}">{% icon 'lock' %} Защита входа</a>
+                <form method="post" action="{% url 'logout' %}">
+                  {% csrf_token %}
+                  <button class="text-button" type="submit">{% icon 'logout' %} Выйти</button>
+                </form>
+              </div>
+            </details>
+          {% endif %}
         </header>
         <main id="main" class="main-content" tabindex="-1">
           {% if messages %}
@@ -93,9 +96,6 @@
           {% endif %}
           {% block content %}{% endblock %}
         </main>
-        <footer class="page-footer">
-          <span>Центр финансовой грамотности</span><span>Мониторинг финансовой культуры</span>
-        </footer>
       </div>
     </div>
   </body>

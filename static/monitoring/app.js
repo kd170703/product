@@ -9,7 +9,8 @@
       toggle.setAttribute('aria-expanded', String(open));
     });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && sidebar.classList.contains('is-open')) {
+        if (sidebar.contains(document.activeElement)) toggle.focus();
         sidebar.classList.remove('is-open');
         toggle.setAttribute('aria-expanded', 'false');
       }
@@ -18,6 +19,19 @@
       if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {
         sidebar.classList.remove('is-open');
         toggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  const account = document.querySelector('details.account');
+  if (account) {
+    document.addEventListener('click', (event) => {
+      if (account.open && !account.contains(event.target)) account.open = false;
+    });
+    account.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && account.open) {
+        account.open = false;
+        account.querySelector('summary').focus();
       }
     });
   }
@@ -52,7 +66,9 @@
   });
   function formatAxis(value) {
     const formatted = axisFormat.format(value);
-    return formatted.length > 14 ? scientificFormat.format(value) : formatted;
+    return formatted.length > 14 || (value !== 0 && Math.abs(value) < 0.001)
+      ? scientificFormat.format(value)
+      : formatted;
   }
   const dataFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 8 });
   const fallbackColors = [
@@ -137,12 +153,11 @@
     const text = svgElement('text', {
       x,
       y,
-      fill: themeColor('--chart-axis', '#526277'),
-      'font-size': 14,
+      class: 'chart-axis-label',
       ...attributes,
     });
     lines.forEach((line, index) => {
-      text.append(svgElement('tspan', { x, dy: index ? 18 : 0 }, line));
+      text.append(svgElement('tspan', { x, dy: index ? 16 : 0 }, line));
     });
     svg.append(text);
     return text;
@@ -151,9 +166,9 @@
   function marker(index, x, y, color, size = 5) {
     const group = svgElement('g', {
       transform: `translate(${x} ${y})`,
-      fill: '#ffffff',
+      fill: 'var(--surface)',
       stroke: color,
-      'stroke-width': 2.5,
+      'stroke-width': 2,
       'stroke-linejoin': 'round',
       'data-series-index': index,
       'data-marker': [
@@ -214,51 +229,68 @@
   }
 
   function hideTooltip(state) {
-    state.tooltip.hidden = true;
-    state.points.forEach((point) => point.element.removeAttribute('aria-describedby'));
+    clearTimeout(state.tooltipTimer);
+    state.activePoint?.classList.remove('is-active');
+    state.activePoint = null;
+    state.tooltip.classList.remove('is-visible', 'is-sliding');
   }
 
-  function showTooltip(state, element, text) {
-    state.tooltip.textContent = text;
-    state.tooltip.hidden = false;
-    element.setAttribute('aria-describedby', state.tooltip.id);
+  function positionTooltip(state, element) {
     const pointBounds = element.getBoundingClientRect();
     const containerBounds = state.container.getBoundingClientRect();
-    const tooltipBounds = state.tooltip.getBoundingClientRect();
-    const halfWidth = tooltipBounds.width / 2;
-    const desiredLeft = pointBounds.left - containerBounds.left + pointBounds.width / 2;
-    const left = Math.max(
-      halfWidth + 8,
-      Math.min(state.container.clientWidth - halfWidth - 8, desiredLeft),
-    );
-    const top = Math.max(
-      tooltipBounds.height + 12,
-      pointBounds.top - containerBounds.top + state.container.scrollTop - 8,
-    );
-    state.tooltip.style.left = `${left}px`;
-    state.tooltip.style.top = `${top}px`;
+    if (pointBounds.bottom < containerBounds.top || pointBounds.top > containerBounds.bottom) {
+      hideTooltip(state);
+      return;
+    }
+    const width = state.tooltip.offsetWidth;
+    const height = state.tooltip.offsetHeight;
+    const center = pointBounds.left - containerBounds.left + pointBounds.width / 2;
+    const left = Math.max(8, Math.min(containerBounds.width - width - 8, center - width / 2));
+    const above = pointBounds.top - containerBounds.top - height - 8;
+    const below = pointBounds.bottom - containerBounds.top + 8;
+    const top = Math.max(0, Math.min(containerBounds.height - height, above >= 0 ? above : below));
+    state.tooltip.style.setProperty('--tooltip-x', `${left}px`);
+    state.tooltip.style.setProperty('--tooltip-y', `${top}px`);
+  }
+
+  function showTooltip(state, element, label, value) {
+    clearTimeout(state.tooltipTimer);
+    state.tooltip.classList.toggle('is-sliding', Boolean(state.activePoint));
+    state.activePoint?.classList.remove('is-active');
+    state.activePoint = element;
+    element.classList.add('is-active');
+    state.tooltipLabel.textContent = label;
+    state.tooltipValue.textContent = value;
+    state.tooltip.classList.add('is-visible');
+    positionTooltip(state, element);
+  }
+
+  function releaseTooltip(state, element) {
+    if (state.activePoint !== element) return;
+    clearTimeout(state.tooltipTimer);
+    state.tooltipTimer = setTimeout(() => hideTooltip(state), 100);
   }
 
   function inspectablePoint(state, element, label, value, series) {
-    const text =
-      `${label}. ${series}: ${dataFormat.format(value)} ${state.chart.unit || ''}`.trim();
+    const formattedValue = `${dataFormat.format(value)} ${state.chart.unit || ''}`.trim();
+    const pointLabel = state.datasets.length > 1 ? `${label} · ${series}` : label;
     const index = state.points.length;
-    element.append(svgElement('title', {}, text));
     element.setAttribute('tabindex', index === state.focusedPoint ? '0' : '-1');
     element.setAttribute('role', 'img');
-    element.setAttribute('aria-label', text);
+    element.setAttribute('aria-label', `${pointLabel}: ${formattedValue}`);
     element.classList.add('chart-data-point');
-    element.addEventListener('mouseenter', () => showTooltip(state, element, text));
-    element.addEventListener('mouseleave', () => {
-      if (document.activeElement !== element) hideTooltip(state);
+    const show = () => showTooltip(state, element, pointLabel, formattedValue);
+    element.addEventListener('pointerenter', show);
+    element.addEventListener('pointerleave', () => {
+      if (!element.matches(':focus-visible')) releaseTooltip(state, element);
     });
     element.addEventListener('focus', () => {
-      state.points.forEach((point) => point.element.setAttribute('tabindex', '-1'));
+      state.points[state.focusedPoint]?.element.setAttribute('tabindex', '-1');
       element.setAttribute('tabindex', '0');
       state.focusedPoint = index;
-      showTooltip(state, element, text);
+      show();
     });
-    element.addEventListener('blur', () => hideTooltip(state));
+    element.addEventListener('blur', () => releaseTooltip(state, element));
     element.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         hideTooltip(state);
@@ -272,7 +304,9 @@
       if (event.key === 'End') next = state.points.length - 1;
       if (next !== undefined) {
         event.preventDefault();
-        state.points[next].element.focus({ preventScroll: true });
+        const nextElement = state.points[next].element;
+        nextElement.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        nextElement.focus({ preventScroll: true });
       }
     });
     state.points.push({ element, index });
@@ -311,16 +345,9 @@
       });
       auxiliary.append(legend);
     }
-    const caption = htmlElement(
-      'p',
-      'chart-caption',
-      datasets.length > 1
-        ? 'Ряды различаются маркерами, рисунком линий и номерами в легенде. Стрелки перемещают фокус между значениями; Escape скрывает подсказку.'
-        : 'Значения доступны с клавиатуры: стрелки перемещают фокус между точками, Escape скрывает подсказку.',
-    );
-    auxiliary.append(caption);
     const details = htmlElement('details', 'chart-data-table chart-accessible-table');
-    const summary = htmlElement('summary', '', 'Показать данные таблицей');
+    const metadata = state.container.parentElement.querySelector(':scope > .chart-meta');
+    const summary = htmlElement('summary', '', metadata ? 'Данные и источник' : 'Данные таблицей');
     const scroll = htmlElement('div', 'table-scroll');
     const table = htmlElement('table');
     table.id = `${state.id}-table`;
@@ -366,6 +393,7 @@
     table.append(body);
     scroll.append(table);
     details.append(summary, scroll);
+    if (metadata) details.append(metadata);
     auxiliary.append(details);
     state.container.after(auxiliary);
     state.auxiliary = auxiliary;
@@ -381,16 +409,31 @@
     return selected.sort((a, b) => a - b);
   }
 
+  function chartScale(values, targetSteps) {
+    const lower = Math.min(0, ...values);
+    const upper = Math.max(0, ...values);
+    const estimate = (upper - lower || 1) / targetSteps;
+    const magnitude = 10 ** Math.floor(Math.log10(estimate));
+    const step =
+      [1, 2, 2.5, 5, 10].find((interval) => interval * magnitude >= estimate) * magnitude;
+    const first = Math.floor(lower / step);
+    const last = Math.ceil((upper || (lower === 0 ? 1 : 0)) / step);
+    const ticks = Array.from({ length: last - first + 1 }, (_, index) => (first + index) * step);
+    return { min: ticks[0], max: ticks[ticks.length - 1], ticks };
+  }
+
   function renderLines(state, svg, width) {
     const { labels, datasets } = state;
     const allValues = datasets.flatMap((dataset) => dataset.values.filter(Number.isFinite));
-    const min = Math.min(0, ...allValues);
-    const max = Math.max(0, ...allValues);
-    const span = max - min || 1;
-    const numericWidth = Math.max(...[min, max].map((value) => formatAxis(value).length)) * 8;
-    const left = Math.max(56, Math.min(150, numericWidth + 14));
-    const right = datasets.length > 1 ? 42 : 20;
-    const plotWidth = Math.max(80, width - left - right);
+    const { min, max, ticks } = chartScale(allValues, 4);
+    const formatTick = (value) => {
+      const formatted = formatAxis(value);
+      return width < 380 && formatted.length > 8 ? scientificFormat.format(value) : formatted;
+    };
+    const numericWidth = Math.max(...ticks.map((value) => formatTick(value).length)) * 7;
+    const left = Math.max(32, numericWidth + 16);
+    const right = datasets.length > 1 ? 38 : 14;
+    const plotWidth = width - left - right;
     const timeline = state.chart.x_values || [];
     const actualTime =
       timeline.length === labels.length &&
@@ -411,19 +454,18 @@
     const tickIndices = chooseTickIndices(positions, width < 460 ? 110 : 125);
     const wrapped = tickIndices.map((index) =>
       splitLines(
-        labels[index],
-        Math.max(10, Math.floor(Math.min(120, plotWidth / Math.max(2, tickIndices.length)) / 7.5)),
+        labels[index].replace(/^(IV|I{1,3}|[1-4])\s+квартал\s+(\d{4})(?:\s+года)?$/i, '$1 кв. $2'),
+        Math.max(10, Math.floor(Math.min(120, plotWidth / Math.max(2, tickIndices.length)) / 7)),
       ),
     );
-    const bottom = 28 + Math.max(...wrapped.map((lines) => lines.length)) * 18;
-    const top = 22;
-    const plotHeight = Math.max(220, datasets.length * 20 + 70);
+    const bottom = 20 + Math.max(...wrapped.map((lines) => lines.length)) * 16;
+    const top = 18;
+    const plotHeight = Math.max(width < 380 ? 160 : 198, datasets.length * 18 + 42);
     const height = top + plotHeight + bottom;
-    const y = (value) => top + ((max - value) / span) * plotHeight;
+    const y = (value) => top + ((max - value) / (max - min)) * plotHeight;
     svg.setAttribute('height', String(height));
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    for (let index = 0; index <= 4; index += 1) {
-      const value = min + (span * index) / 4;
+    ticks.forEach((value) => {
       const yy = y(value);
       svg.append(
         svgElement('line', {
@@ -431,24 +473,22 @@
           y1: yy,
           x2: left + plotWidth,
           y2: yy,
-          stroke: themeColor('--chart-grid', '#d6dee8'),
-          'stroke-dasharray': '3 4',
+          class: value === 0 ? 'chart-zero-line' : 'chart-grid-line',
         }),
       );
       svg.append(
         svgElement(
           'text',
           {
-            x: left - 10,
-            y: yy + 5,
+            x: left - 9,
+            y: yy + 4,
             'text-anchor': 'end',
-            fill: themeColor('--chart-axis', '#526277'),
-            'font-size': 14,
+            class: 'chart-axis-label',
           },
-          formatAxis(value),
+          formatTick(value),
         ),
       );
-    }
+    });
     const endingLabels = [];
     datasets.forEach((dataset, seriesIndex) => {
       const color = seriesColor(seriesIndex);
@@ -460,7 +500,9 @@
               points: segment.join(' '),
               fill: 'none',
               stroke: color,
-              'stroke-width': 3,
+              'stroke-width': 2.5,
+              'stroke-linecap': 'round',
+              'stroke-linejoin': 'round',
               'stroke-dasharray': dashPatterns[seriesIndex % dashPatterns.length],
               'data-series-index': seriesIndex,
             }),
@@ -475,7 +517,8 @@
       let last;
       dataset.values.forEach((value, index) => {
         if (!Number.isFinite(value)) return;
-        const point = marker(seriesIndex, positions[index], y(value), color);
+        const point = marker(seriesIndex, positions[index], y(value), color, 4);
+        point.prepend(svgElement('circle', { r: 10, fill: 'transparent', stroke: 'none' }));
         svg.append(point);
         inspectablePoint(state, point, labels[index], value, dataset.label);
         last = { x: positions[index], y: y(value) };
@@ -522,7 +565,7 @@
       });
     }
     tickIndices.forEach((index, ordinal) => {
-      multilineText(svg, wrapped[ordinal], positions[index], top + plotHeight + 25, {
+      multilineText(svg, wrapped[ordinal], positions[index], top + plotHeight + 22, {
         'text-anchor': index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle',
       });
     });
@@ -532,58 +575,58 @@
   function renderBars(state, svg, width) {
     const { labels, datasets } = state;
     const allValues = datasets.flatMap((dataset) => dataset.values.filter(Number.isFinite));
-    const min = Math.min(0, ...allValues);
-    const max = Math.max(0, ...allValues);
-    const span = max - min || 1;
-    const compact = width < 570;
-    const textColor = themeColor('--chart-axis', '#526277');
-    const longestValue = Math.max(...allValues.map((value) => dataFormat.format(value).length));
-    const left = compact ? 24 : Math.min(290, Math.floor(width * 0.42));
-    const right = compact
-      ? 24
-      : Math.min(Math.max(70, longestValue * 8 + 14), Math.max(80, width - left - 110));
-    const plotWidth = Math.max(90, width - left - right - 12);
-    const x = (value) => left + ((value - min) / span) * plotWidth;
+    const { min, max, ticks } = chartScale(allValues, width < 340 ? 2 : 4);
+    const compact = width < 490;
+    const formatBarValue = (value) => {
+      const formatted = dataFormat.format(value);
+      return formatted.length > 14 ? scientificFormat.format(value) : formatted;
+    };
+    const longestValue = Math.max(...allValues.map((value) => formatBarValue(value).length));
+    const left = compact ? 8 : Math.min(260, Math.floor(width * 0.36));
+    const right = Math.max(54, longestValue * 8 + 18);
+    const plotWidth = width - left - right;
+    const x = (value) => left + ((value - min) / (max - min)) * plotWidth;
     const zero = x(0);
+    const colors = datasets.map((_, index) => seriesColor(index));
     const rows = [];
-    let cursor = 16;
+    const lineHeight = 16;
+    const barHeight = 16;
+    const barStep = 24;
+    let cursor = 10;
     labels.forEach((label, index) => {
       const displayLabel =
         label === state.chart.title && (state.chart.period_summary || state.chart.period)
           ? state.chart.period_summary || state.chart.period
           : label;
-      const lineWidth = compact ? width - 28 : left - 24;
-      const lines = splitLines(displayLabel, Math.max(12, Math.floor(lineWidth / 7.4)));
-      const barsHeight = datasets.length * (compact ? 44 : 27);
+      const lineWidth = compact ? width - 16 : left - 18;
+      const lines = splitLines(displayLabel, Math.max(10, Math.floor(lineWidth / 7)));
+      const labelHeight = lines.length * lineHeight;
+      const barsHeight = barHeight + (datasets.length - 1) * barStep;
       const rowHeight = compact
-        ? lines.length * 18 + barsHeight + 22
-        : Math.max(lines.length * 18, barsHeight) + 25;
+        ? labelHeight + barsHeight + 16
+        : Math.max(labelHeight, barsHeight) + 12;
       rows.push({
         index,
-        top: cursor,
+        displayLabel,
         lines,
-        height: rowHeight,
-        barsTop: compact
-          ? cursor + lines.length * 18 + 6
-          : cursor + Math.max(0, (rowHeight - 25 - barsHeight) / 2),
+        labelTop: compact ? cursor : cursor + (rowHeight - 12 - labelHeight) / 2,
+        barsTop: compact ? cursor + labelHeight + 5 : cursor + (rowHeight - 12 - barsHeight) / 2,
       });
       cursor += rowHeight;
     });
-    const height = Math.max(230, cursor + 45);
+    const axisY = Math.max(78, cursor);
+    const height = axisY + 32;
     svg.setAttribute('height', String(height));
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    const tickCount = compact ? 1 : 4;
-    for (let index = 0; index <= tickCount; index += 1) {
-      const value = min + (span * index) / tickCount;
+    ticks.forEach((value, index) => {
       const xx = x(value);
       svg.append(
         svgElement('line', {
           x1: xx,
-          y1: 10,
+          y1: 4,
           x2: xx,
-          y2: cursor,
-          stroke: themeColor('--chart-grid', '#d6dee8'),
-          'stroke-dasharray': '3 4',
+          y2: axisY,
+          class: `${value === 0 ? 'chart-zero-line' : 'chart-grid-line'}${compact ? ' chart-grid-compact' : ''}`,
         }),
       );
       svg.append(
@@ -591,50 +634,53 @@
           'text',
           {
             x: xx,
-            y: height - 8,
-            'text-anchor': index === 0 ? 'start' : index === tickCount ? 'end' : 'middle',
-            fill: textColor,
-            'font-size': 14,
+            y: axisY + 19,
+            'text-anchor': index === 0 ? 'start' : index === ticks.length - 1 ? 'end' : 'middle',
+            class: 'chart-axis-label',
           },
           formatAxis(value),
         ),
       );
-    }
+    });
     rows.forEach((row) => {
-      multilineText(svg, row.lines, compact ? 12 : left - 14, row.top + 14, {
+      multilineText(svg, row.lines, compact ? 8 : left - 12, row.labelTop + 12, {
         'text-anchor': compact ? 'start' : 'end',
+        class: 'chart-bar-label',
       });
       datasets.forEach((dataset, seriesIndex) => {
         const value = dataset.values[row.index];
         if (!Number.isFinite(value)) return;
         const xx = x(value);
-        const y = row.barsTop + seriesIndex * (compact ? 44 : 27);
-        const color = seriesColor(seriesIndex);
+        const y = row.barsTop + seriesIndex * barStep;
+        const color = colors[seriesIndex];
         const bar = svgElement('rect', {
           x: Math.min(zero, xx),
           y,
           width: Math.max(2, Math.abs(xx - zero)),
-          height: 18,
-          rx: 2,
+          height: barHeight,
+          rx: 3,
           fill: color,
+          class: 'chart-bar',
           'data-series-index': seriesIndex,
         });
         svg.append(bar);
-        inspectablePoint(state, bar, labels[row.index], value, dataset.label);
-        const endMarker = marker(seriesIndex, xx, y + 9, color, 4);
-        endMarker.setAttribute('aria-hidden', 'true');
-        svg.append(endMarker);
+        inspectablePoint(state, bar, row.displayLabel, value, dataset.label);
+        if (datasets.length > 1) {
+          const endMarker = marker(seriesIndex, xx, y + barHeight / 2, color, 4);
+          endMarker.setAttribute('aria-hidden', 'true');
+          endMarker.setAttribute('pointer-events', 'none');
+          svg.append(endMarker);
+        }
         svg.append(
           svgElement(
             'text',
             {
               x: width - 8,
-              y: y + (compact ? 36 : 14),
+              y: y + 12,
               'text-anchor': 'end',
-              fill: textColor,
-              'font-size': 14,
+              class: 'chart-bar-value',
             },
-            dataFormat.format(value),
+            formatBarValue(value),
           ),
         );
       });
@@ -654,7 +700,7 @@
     hideTooltip(state);
     const svg = svgElement('svg', {
       width,
-      role: 'img',
+      role: 'group',
       'aria-labelledby': `${state.id}-title ${state.id}-description`,
       'aria-describedby': `${state.id}-table-caption`,
       focusable: 'false',
@@ -700,6 +746,7 @@
       if (!state) return;
       if (chartObserver) chartObserver.unobserve(container);
       cancelAnimationFrame(state.frameRequest);
+      hideTooltip(state);
       chartStates.delete(container);
     });
   }
@@ -707,9 +754,13 @@
   function drawChart(container, chart) {
     const prior = chartStates.get(container);
     if (prior) {
+      const metadata = prior.auxiliary.querySelector('.chart-meta');
+      if (metadata) container.after(metadata);
       prior.auxiliary.remove();
       if (chartObserver) chartObserver.unobserve(container);
       cancelAnimationFrame(prior.frameRequest);
+      hideTooltip(prior);
+      chartStates.delete(container);
     }
     const datasets = (
       chart.datasets && chart.datasets.length
@@ -735,9 +786,13 @@
     }
     state.frame = htmlElement('div', 'chart-frame');
     state.tooltip = htmlElement('div', 'chart-tooltip');
-    state.tooltip.hidden = true;
-    state.tooltip.id = `${state.id}-tooltip`;
-    state.tooltip.setAttribute('role', 'tooltip');
+    state.tooltip.setAttribute('aria-hidden', 'true');
+    state.tooltipLabel = htmlElement('span', 'chart-tooltip-label');
+    state.tooltipValue = htmlElement('strong', 'chart-tooltip-value');
+    state.tooltip.append(state.tooltipLabel, state.tooltipValue);
+    state.frame.addEventListener('scroll', () => {
+      if (state.activePoint) positionTooltip(state, state.activePoint);
+    });
     container.append(state.frame, state.tooltip);
     chartStates.set(container, state);
     buildAccessibleData(state);
@@ -748,23 +803,16 @@
   function chartCard(chart) {
     const card = htmlElement('section', 'panel chart-panel');
     const heading = htmlElement('div', 'chart-heading');
-    heading.append(
-      htmlElement('h3', '', chart.title),
-      htmlElement('span', 'unit-label', chart.unit),
-    );
-    card.append(
-      heading,
-      htmlElement(
-        'p',
-        'chart-context',
-        `${chart.territory} · ${chart.period_summary || chart.period}`,
-      ),
-    );
+    heading.append(htmlElement('h3', '', chart.title));
+    if (chart.unit) heading.append(htmlElement('span', 'unit-label', chart.unit));
+    card.append(heading);
+    const context = [chart.territory, chart.period_summary || chart.period].filter(Boolean);
+    if (context.length) card.append(htmlElement('p', 'chart-context', context.join(' · ')));
     const container = htmlElement('div', 'chart-container');
     card.append(container);
-    drawChart(container, chart);
-    if (chart.notes) card.append(htmlElement('p', 'chart-note', chart.notes));
-    const source = htmlElement('div', 'chart-source', 'Источник: ');
+    const metadata = htmlElement('div', 'chart-meta');
+    if (chart.notes) metadata.append(htmlElement('p', 'chart-note', chart.notes));
+    const source = htmlElement('p', 'chart-source', 'Источник: ');
     const url = safeUrl(chart.source_url);
     if (url) {
       const link = htmlElement('a', '', chart.source_name || 'Исходный реестр');
@@ -775,7 +823,9 @@
     } else {
       source.append(document.createTextNode(chart.source_name || 'Исходный реестр'));
     }
-    card.append(source);
+    metadata.append(source);
+    card.append(metadata);
+    drawChart(container, chart);
     return card;
   }
 
@@ -796,6 +846,7 @@
   if (!builder) return;
   const urlState = new URL(location.href);
   urlState.searchParams.delete('page');
+  urlState.searchParams.delete('chart_page');
   const storageKey = `financial-chart-selection:${urlState.pathname}?${urlState.searchParams.toString()}`;
   let selected = new Set();
   try {
@@ -807,6 +858,10 @@
   const master = document.getElementById('select-page');
   const info = document.getElementById('chart-selection-summary');
   const output = document.getElementById('selected-charts');
+  const clearSelection = document.getElementById('clear-selection');
+  const buildSelection = document.getElementById('build-selection');
+  const buildFiltered = document.getElementById('build-filtered');
+  const buildRegisterSelection = document.getElementById('build-register-selection');
 
   function syncSelection() {
     checks.forEach((checkbox) => {
@@ -816,7 +871,9 @@
       master.checked = checks.length > 0 && checks.every((checkbox) => checkbox.checked);
       master.indeterminate = checks.some((checkbox) => checkbox.checked) && !master.checked;
     }
-    info.textContent = `Отмечено строк: ${selected.size}. Можно выбрать строки на нескольких страницах.`;
+    clearSelection.hidden = selected.size === 0;
+    buildRegisterSelection.hidden = selected.size === 0;
+    buildRegisterSelection.textContent = `Диаграммы по отмеченным (${selected.size})`;
     try {
       sessionStorage.setItem(storageKey, JSON.stringify([...selected]));
     } catch (error) {
@@ -839,9 +896,10 @@
       syncSelection();
     });
   }
-  document.getElementById('clear-selection').addEventListener('click', () => {
+  clearSelection.addEventListener('click', () => {
     selected.clear();
     syncSelection();
+    buildFiltered.focus();
   });
   syncSelection();
 
@@ -851,17 +909,18 @@
       return;
     }
     const endpoint = new URL(builder.dataset.chartEndpoint, location.origin);
-    const parameters = new URLSearchParams(location.search);
-    parameters.delete('page');
+    const parameters = new URLSearchParams(urlState.search);
     // A section route applies a filter even when it is absent from the URL query.
     if (builder.dataset.chartSection) parameters.set('section', builder.dataset.chartSection);
     parameters.set('chart_kind', document.getElementById('chart-kind').value);
     if (onlySelected) parameters.set('ids', [...selected].join(','));
     endpoint.search = parameters.toString();
-    const buttons = [
-      document.getElementById('build-selection'),
-      document.getElementById('build-filtered'),
-    ];
+    const buttons = [buildSelection, buildFiltered, buildRegisterSelection];
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scrollOptions = { behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' };
+    builder.open = true;
+    builder.querySelector('summary').focus({ preventScroll: true });
+    if (onlySelected) builder.scrollIntoView(scrollOptions);
     buttons.forEach((button) => {
       button.disabled = true;
     });
@@ -887,10 +946,19 @@
           ? `Показано диаграмм: ${shown} из ${data.chart_count} · наблюдений в выборке: ${data.observations_count}.`
           : data.message;
       }
-      more.addEventListener('click', append);
+      more.addEventListener('click', () => {
+        const next = shown;
+        append();
+        const firstNewChart = output.children[next];
+        firstNewChart.tabIndex = -1;
+        firstNewChart.focus({ preventScroll: true });
+        firstNewChart.scrollIntoView(scrollOptions);
+      });
       append();
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      output.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      if (builder.open && data.chart_count) {
+        output.focus({ preventScroll: true });
+        output.scrollIntoView(scrollOptions);
+      }
     } catch (error) {
       info.textContent = error.message;
     } finally {
@@ -899,6 +967,7 @@
       });
     }
   }
-  document.getElementById('build-selection').addEventListener('click', () => build(true));
-  document.getElementById('build-filtered').addEventListener('click', () => build(false));
+  buildSelection.addEventListener('click', () => build(true));
+  buildFiltered.addEventListener('click', () => build(false));
+  buildRegisterSelection.addEventListener('click', () => build(true));
 })();

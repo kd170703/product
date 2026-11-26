@@ -74,12 +74,7 @@ def weighted_accuracy(rows):
 def dashboard_payload(filters,section=None):
     filters=normalize_period_filters(filters)
     rows=filtered_observations(filters,section)
-    available=build_chart_specs(rows)
-    # Preview is bounded; the constructor can display every chart in the selection.
-    charts=[];counts=defaultdict(int)
-    for spec in available:
-        if counts[spec['section']]>=2:continue
-        charts.append({k:v for k,v in spec.items() if k!='rows'});counts[spec['section']]+=1
+    charts=build_chart_specs(rows)
     warnings=[filters['_period_error']] if filters.get('_period_error') else []
     if section=='irfk' and not Methodology.objects.filter(approved=True,code='irfk').exists():warnings.append('Полный ИРФК не рассчитан: необходимы согласованная версия методики и полный набор компонентов.')
-    return {'rows':rows,'stats':{'indicators':len(set(r['indicator_code'] for r in rows)),'observations':len(rows),'sources':len(set(r['source_name'] for r in rows))},'charts':charts,'charts_total':len(available),'warnings':warnings,'accuracy':weighted_accuracy(rows),'limitation':'Возрастные срезы появятся при загрузке соответствующих групп респондентов.' if section=='sociology' and not any('возраст' in r['group'].casefold() for r in rows) else ''}
+    return {'rows':rows,'stats':{'indicators':len(set(r['indicator_code'] for r in rows)),'observations':len(rows),'sources':len(set(r['source_name'] for r in rows))},'charts':charts,'warnings':warnings,'accuracy':weighted_accuracy(rows),'limitation':'Возрастные срезы появятся при загрузке соответствующих групп респондентов.' if section=='sociology' and not any('возраст' in r['group'].casefold() for r in rows) else ''}

@@ -40,10 +40,15 @@
                href="{% url 'monitoring:observation_detail' row.id %}">{{ row.indicator_name }}</a>
             {% if row.answer %}<div class="cell-meta">{{ row.answer }}</div>{% endif %}
             {% if row.group %}<div class="cell-meta">{{ row.group }}</div>{% endif %}
-            <div class="cell-meta">
-              <span class="section-tag">{{ row.section_label }}</span>
-              {% if row.indicator_code %}{{ row.indicator_code }}{% endif %}
-            </div>
+            {% if active == 'dashboard' or row.indicator_code %}
+              <div class="cell-meta">
+                {% if active == 'dashboard' %}
+                  {{ row.section_label }}
+                  {% if row.indicator_code %}·{% endif %}
+                {% endif %}
+                {{ row.indicator_code }}
+              </div>
+            {% endif %}
           </td>
           <td class="number-cell" data-label="Значение" role="cell">
             <strong class="{% if row.data_state != 'value' %}muted{% endif %}">{{ row.value_display }}</strong>
